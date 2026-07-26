@@ -3445,6 +3445,12 @@
 
   // `?` で開くショートカット一覧オーバーレイ(必要時に生成)
   let helpEl = null;
+  // macOS では Option / Command 記号で書く(このツールの主な配布先が macOS のため)。
+  // DOM スタブのテスト環境では navigator が無いので false 扱いにする。
+  const IS_MAC =
+    typeof navigator !== 'undefined' &&
+    // userAgentData.platform は "macOS"(小文字 m)を返すため大文字小文字を無視して判定する
+    /mac|iphone|ipad/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '');
   const HELP_ROWS = [
     ['↑ / ↓', '行を上下に移動'],
     ['→ / ←', '展開 / 折りたたみ(葉なら親子を移動)'],
@@ -3452,12 +3458,12 @@
     ['/', '検索欄へフォーカス'],
     ['b', 'フォーカス行をブックマーク'],
     ['Esc', 'モーダル / プレビュー / 選択を閉じる'],
-    ['Alt + ← / →', '戻る / 進む(フォーカス履歴)'],
+    [IS_MAC ? '⌥ + ← / →' : 'Alt + ← / →', '戻る / 進む(フォーカス履歴)'],
     ['?', 'このヘルプを開閉'],
-    ['⟳ ボタン', 'コードを解析し直して表示を更新(表示位置は保持)'],
+    ['再解析ボタン', 'コードを解析し直して表示を更新(表示位置は保持)'],
     ['クリック', 'フォーカス(依存線を強調)'],
     ['ホバー', 'その行の依存線だけ強調'],
-    ['⌘/Ctrl + クリック', 'ソース上で定義へジャンプ'],
+    [IS_MAC ? '⌘ + クリック' : 'Ctrl + クリック', 'ソース上で定義へジャンプ'],
   ];
   {
     const hb = $('#btn-help');
@@ -3472,7 +3478,6 @@
     if (rb && rb.addEventListener) {
       rb.addEventListener('click', () => {
         if (rb.classList) rb.classList.add('busy');
-        rb.textContent = '⟳';
         rb.title = '再解析中…';
         // ハッシュ(表示位置)を確定させてから読み直す
         try {
@@ -3490,10 +3495,24 @@
      手動で選んだ場合だけ <html data-theme="light|dark"> を立て、localStorage に保存する */
   const THEME_KEY = 'strata.theme';
   const THEME_ORDER = ['auto', 'light', 'dark'];
+  // 記号・絵文字はフォントによって大きさと基線がばらつくので SVG で描く
+  const svgIcon = (paths) =>
+    `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ` +
+    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
   const THEME_UI = {
-    auto: { icon: '◐', label: 'テーマ: 自動(OS 設定に追従)。クリックでライトへ' },
-    light: { icon: '☀', label: 'テーマ: ライト。クリックでダークへ' },
-    dark: { icon: '☾', label: 'テーマ: ダーク。クリックで自動へ' },
+    auto: {
+      // 半月(左半分を塗る)= OS 設定に追従
+      icon: svgIcon('<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none"/>'),
+      label: 'テーマ: 自動(OS 設定に追従)。クリックでライトへ',
+    },
+    light: {
+      icon: svgIcon('<circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+      label: 'テーマ: ライト。クリックでダークへ',
+    },
+    dark: {
+      icon: svgIcon('<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>'),
+      label: 'テーマ: ダーク。クリックで自動へ',
+    },
   };
   function applyTheme(mode) {
     const root = typeof document !== 'undefined' && document.documentElement;
@@ -3507,7 +3526,7 @@
     const btn = $('#btn-theme');
     if (btn) {
       const ui = THEME_UI[mode] || THEME_UI.auto;
-      btn.textContent = ui.icon;
+      btn.innerHTML = ui.icon;
       btn.title = ui.label;
       if (btn.setAttribute) btn.setAttribute('aria-label', ui.label);
     }

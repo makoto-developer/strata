@@ -47,10 +47,21 @@
       <button id="btn-back" title="1 つ前に見ていたノードへ戻る(Alt+←)" disabled>←</button>
       <button id="btn-fwd" title="戻る前のノードへ進む(Alt+→)" disabled>→</button>
     </div>
-    <button id="btn-stack" title="スタックトレース解析を開く。panic やエラーログを貼り付けると該当する関数・行に飛べる">📋 トレース</button>
+    <button id="btn-stack" title="スタックトレース解析を開く。panic やエラーログを貼り付けると該当する関数・行に飛べる">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="8" y="3" width="8" height="4" rx="1"/>
+        <path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/>
+        <path d="M8.5 12h7M8.5 16h4"/>
+      </svg>
+      トレース
+    </button>
     <button id="btn-help" class="helpbtn" title="キーボード / 操作ショートカットの一覧を開く(? キー)">?</button>
-    <button id="btn-reload" title="いまのコードを解析し直して表示を更新する(表示中の位置・検索条件は保持されます)" aria-label="再解析">⟳</button>
-    <button id="btn-theme" title="テーマ切替(自動 → ライト → ダーク)" aria-label="テーマ切替">◐</button>
+    <button id="btn-reload" class="iconbtn" title="いまのコードを解析し直して表示を更新する(表示中の位置・検索条件は保持されます)" aria-label="再解析">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>
+      </svg>
+    </button>
+    <button id="btn-theme" class="iconbtn" title="テーマ切替(自動 → ライト → ダーク)" aria-label="テーマ切替"></button>
   </div>
   <div class="bar bar-context structonly">
     <div class="group seg">
