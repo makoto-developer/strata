@@ -2,7 +2,7 @@
 title: プロトコル横断の追跡
 layout: default
 parent: ガイド
-nav_order: 2
+nav_order: 5
 ---
 
 # プロトコル横断の追跡(gRPC / HTTP / GraphQL)

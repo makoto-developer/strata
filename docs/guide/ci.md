@@ -2,7 +2,7 @@
 title: CI で構造を守る
 layout: default
 parent: ガイド
-nav_order: 3
+nav_order: 6
 ---
 
 # CI で構造を守る

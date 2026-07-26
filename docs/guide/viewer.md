@@ -1,13 +1,16 @@
 ---
-title: ビューアの使い方
+title: 画面の全体像
 layout: default
 parent: ガイド
 nav_order: 1
 ---
 
-# ビューアの使い方
+# 画面の全体像
 
 各タブが「どんな問いに答えるためのものか」から説明します。
+**個々のボタンの機能**は [ボタンと操作の一覧]({{ site.baseurl }}/guide/toolbar/)、
+**線やバッジの読み方**は [構造ビューの読み方]({{ site.baseurl }}/guide/read-structure/) と
+[API タブの読み方]({{ site.baseurl }}/guide/api-tab/) にまとめています。
 
 ## 構造タブ — 「この依存、向きは正しいか?」
 
@@ -33,6 +36,8 @@ nav_order: 1
   <img alt="構造タブ" src="{{ site.baseurl }}/assets/shots/structure-light.png">
 </picture>
 
+→ 詳しい読み方: [構造ビューの読み方]({{ site.baseurl }}/guide/read-structure/)
+
 ## API タブ — 「この API は誰が呼んでいるのか?」
 
 proto の RPC・HTTP エンドポイント・GraphQL フィールドを 1 つのカタログにまとめます。
@@ -48,6 +53,8 @@ proto の RPC・HTTP エンドポイント・GraphQL フィールドを 1 つの
   <source media="(prefers-color-scheme: dark)" srcset="{{ site.baseurl }}/assets/shots/api-dark.png">
   <img alt="API タブ" src="{{ site.baseurl }}/assets/shots/api-light.png">
 </picture>
+
+→ 詳しい読み方: [API タブの読み方]({{ site.baseurl }}/guide/api-tab/)
 
 ## 図タブ — 「サービス構成を人に説明したい」
 

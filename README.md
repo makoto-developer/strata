@@ -18,6 +18,10 @@ strata check ./my-monorepo   # CI で循環依存・レイヤー違反を検査�
 > インストール手順・各画面の見方・設定リファレンス・CI への組み込み方・
 > 「なぜこの設計なのか」まで、まとまった説明書があります。
 > この README は概要です。**実際に使うときはドキュメントサイトを見てください。**
+>
+> - [ボタンと操作の一覧](https://makoto-developer.github.io/strata/guide/toolbar/)(画像つき)
+> - [構造ビューの読み方](https://makoto-developer.github.io/strata/guide/read-structure/)(線の色・向き・バッジ)
+> - [API タブの読み方](https://makoto-developer.github.io/strata/guide/api-tab/)(未使用 API の判断・フローの読み方)
 
 ## こんなことになっていませんか
 
