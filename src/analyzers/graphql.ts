@@ -14,9 +14,16 @@
 // 無効化: strata.config.json の { "graphql": { "enabled": false } }
 
 import * as path from 'node:path';
-import { chainBase, readFileText, type Ctx, type Project } from '../context.ts';
-import { countLines, makeLineFinder } from '../lex.ts';
-import { buildFuncIndex, enclosingNodeId, topAncestorId, type FuncIndex } from './endpoints.ts';
+import { chainBase, type Ctx } from '../context.ts';
+import { countLines, makeLineFinder, matchBrace } from '../lex.ts';
+import {
+  buildFuncIndex,
+  buildShortNameIndex,
+  enclosingNodeId,
+  readSource,
+  topAncestorId,
+  type FuncIndex,
+} from './endpoints.ts';
 
 const ROOTS: Record<string, 'query' | 'mutation' | 'subscription'> = {
   Query: 'query',
@@ -38,18 +45,7 @@ function* typeBlocks(
   const re = /\b(extend\s+)?(type|interface)\s+(\w+)([^{}]*)\{/g;
   for (let m = re.exec(sdl); m; m = re.exec(sdl)) {
     const open = re.lastIndex - 1;
-    let depth = 0;
-    let end = -1;
-    for (let i = open; i < sdl.length; i++) {
-      if (sdl[i] === '{') depth++;
-      else if (sdl[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
+    const end = matchBrace(sdl, open);
     if (end < 0) continue;
     yield {
       kind: (m[1] ? 'extend ' : '') + m[3],
@@ -88,39 +84,82 @@ function entitiesOf(sdl: string): { owned: Record<string, string>; extended: Rec
   return { owned, extended };
 }
 
+/** open の位置の括弧に対応する閉じ括弧の位置。見つからなければ -1。 */
+function matchParen(src: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '(') depth++;
+    else if (src[i] === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/** `...Fragment` / `... on Type` を読み飛ばし、最後に読んだ位置を返す。 */
+function skipSpread(body: string, start: number): number {
+  let i = start;
+  while (i < body.length && body[i] === '.') i++;
+  const name = /^\s*(\w+)/.exec(body.slice(i));
+  if (!name) return i - 1;
+  i += name[0].length;
+  if (name[1] !== 'on') return i - 1;
+  const type = /^\s*\w+/.exec(body.slice(i));
+  return (type ? i + type[0].length : i) - 1;
+}
+
+/**
+ * 選択セットの本文から、最上位の選択フィールド名だけを取り出す。
+ * 引数リスト `(...)`・ディレクティブ・コメント・文字列・入れ子の選択セットは読み飛ばす。
+ * `alias: field` は field 側を採る(スキーマに存在するのは field のため)。
+ * 制限: ルート直下のインラインフラグメント(`... on X { ... }`)の中身は数えない。
+ */
+function rootFields(body: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') depth--;
+    else if (ch === '(') {
+      const close = matchParen(body, i);
+      if (close < 0) break;
+      i = close;
+    } else if (ch === '"') {
+      // 三重引用符も終端が `"` なので、次の引用符まで飛ばせば足りる
+      while (++i < body.length && body[i] !== '"') if (body[i] === '\\') i++;
+    } else if (ch === '#') {
+      while (i < body.length && body[i] !== '\n') i++;
+    } else if (ch === '.') {
+      i = skipSpread(body, i);
+    } else if (ch === '@' || ch === '$') {
+      while (i + 1 < body.length && /\w/.test(body[i + 1])) i++; // ディレクティブ名・変数名
+    } else if (/[A-Za-z_]/.test(ch)) {
+      let j = i;
+      while (j < body.length && /\w/.test(body[j])) j++;
+      const word = body.slice(i, j);
+      i = j - 1;
+      // 直後が `:` ならエイリアス。実フィールド名は次の語なので、ここでは出さない
+      let k = j;
+      while (k < body.length && /\s/.test(body[k])) k++;
+      if (body[k] === ':') continue;
+      if (depth === 0 && !['on', 'true', 'false', 'null'].includes(word)) out.push(word);
+    }
+  }
+  return out;
+}
+
 /** クライアント側の操作テキストから、ルート直下の選択フィールド名を取り出す。 */
 function selectionsOf(op: string): Array<{ root: 'query' | 'mutation' | 'subscription'; name: string }> {
   const out: Array<{ root: 'query' | 'mutation' | 'subscription'; name: string }> = [];
   const re = /\b(query|mutation|subscription)\b[^{}]*\{/g;
   for (let m = re.exec(op); m; m = re.exec(op)) {
     const open = re.lastIndex - 1;
-    let depth = 0;
-    let end = -1;
-    for (let i = open; i < op.length; i++) {
-      if (op[i] === '{') depth++;
-      else if (op[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
+    const end = matchBrace(op, open);
     if (end < 0) continue;
-    const body = op.slice(open + 1, end);
-    // ルート直下(ネストの外側)の識別子だけを見る
-    let depth2 = 0;
-    const nameRe = /([A-Za-z_]\w*)\s*(\(|\{|:|\n|$)|([{}])/g;
-    for (let f = nameRe.exec(body); f; f = nameRe.exec(body)) {
-      if (f[3] === '{') depth2++;
-      else if (f[3] === '}') depth2--;
-      else if (depth2 === 0 && f[1]) {
-        const nm = f[1];
-        if (!['fragment', 'on', 'true', 'false', 'null'].includes(nm)) {
-          out.push({ root: m[1] as 'query' | 'mutation' | 'subscription', name: nm });
-        }
-      }
-    }
+    const root = m[1] as 'query' | 'mutation' | 'subscription';
+    for (const name of rootFields(op.slice(open + 1, end))) out.push({ root, name });
     re.lastIndex = end;
   }
   return out;
@@ -191,12 +230,8 @@ export function detectGraphql(ctx: Ctx): void {
   // 1) スキーマファイル(.graphql / .gql / .graphqls)
   for (const project of ctx.projects) {
     for (const wsRel of project.gqlFiles ?? []) {
-      let src: string;
-      try {
-        src = readFileText(ctx, wsRel);
-      } catch {
-        continue;
-      }
+      const src = readSource(ctx, wsRel);
+      if (src === undefined) continue;
       const dirname = path.posix.dirname(wsRel);
       const dir = dirname === '.' ? '' : dirname;
       const base = chainBase(ctx, project, dir);
@@ -217,12 +252,8 @@ export function detectGraphql(ctx: Ctx): void {
   // 2) コード中のインライン SDL(Apollo の typeDefs = gql`type Query { ... }`)
   for (const project of ctx.projects) {
     for (const wsRel of [...project.jsFiles, ...project.goFiles]) {
-      let src: string;
-      try {
-        src = readFileText(ctx, wsRel);
-      } catch {
-        continue;
-      }
+      const src = readSource(ctx, wsRel);
+      if (src === undefined) continue;
       if (!src.includes('type Query') && !src.includes('type Mutation') && !src.includes('extend type')) continue;
       const lineOf = makeLineFinder(src);
       for (const lit of gqlLiterals(src)) {
@@ -238,14 +269,7 @@ export function detectGraphql(ctx: Ctx): void {
   if (fields.length === 0 && entityUsers.length === 0) return;
 
   // 3) リゾルバ実装 → impl 辺
-  const funcByLabel = new Map<string, string[]>();
-  for (const node of ctx.builder.nodes.values()) {
-    if (node.kind !== 'func') continue;
-    const short = node.label.includes('.') ? node.label.slice(node.label.lastIndexOf('.') + 1) : node.label;
-    const key = short.toLowerCase();
-    if (!funcByLabel.has(key)) funcByLabel.set(key, []);
-    funcByLabel.get(key)!.push(node.id);
-  }
+  const funcByLabel = buildShortNameIndex(ctx, true);
   const linkImpl = (rootKind: 'query' | 'mutation' | 'subscription', name: string, funcId: string): void => {
     const cands = byName.get(`${rootKind}:${name.toLowerCase()}`) ?? [];
     if (cands.length === 1) ctx.builder.addEdge(cands[0].id, funcId, 'impl');
@@ -254,12 +278,8 @@ export function detectGraphql(ctx: Ctx): void {
   for (const project of ctx.projects) {
     // Go(gqlgen): func (r *queryResolver) Users(ctx context.Context, ...)
     for (const wsRel of project.goFiles) {
-      let src: string;
-      try {
-        src = readFileText(ctx, wsRel);
-      } catch {
-        continue;
-      }
+      const src = readSource(ctx, wsRel);
+      if (src === undefined) continue;
       if (!/Resolver\b/.test(src)) continue;
       const lineOf = makeLineFinder(src);
       const re = /func\s*\(\s*\w+\s+\*?(query|mutation|subscription)Resolver\s*\)\s*(\w+)\s*\(/gi;
@@ -271,29 +291,14 @@ export function detectGraphql(ctx: Ctx): void {
     }
     // TS/JS(Apollo): const resolvers = { Query: { users: ..., }, Mutation: { ... } }
     for (const wsRel of project.jsFiles) {
-      let src: string;
-      try {
-        src = readFileText(ctx, wsRel);
-      } catch {
-        continue;
-      }
+      const src = readSource(ctx, wsRel);
+      if (src === undefined) continue;
       if (!/\b(Query|Mutation|Subscription)\s*:\s*\{/.test(src)) continue;
       const lineOf = makeLineFinder(src);
       const blockRe = /\b(Query|Mutation|Subscription)\s*:\s*\{/g;
       for (let m = blockRe.exec(src); m; m = blockRe.exec(src)) {
         const open = blockRe.lastIndex - 1;
-        let depth = 0;
-        let end = -1;
-        for (let i = open; i < src.length; i++) {
-          if (src[i] === '{') depth++;
-          else if (src[i] === '}') {
-            depth--;
-            if (depth === 0) {
-              end = i;
-              break;
-            }
-          }
-        }
+        const end = matchBrace(src, open);
         if (end < 0) continue;
         const body = src.slice(open + 1, end);
         const rootKind = ROOTS[m[1]];
@@ -319,12 +324,8 @@ export function detectGraphql(ctx: Ctx): void {
   // 4) クライアント操作 → graphql 辺
   for (const project of ctx.projects) {
     for (const wsRel of [...project.jsFiles, ...project.goFiles, ...project.pyFiles]) {
-      let src: string;
-      try {
-        src = readFileText(ctx, wsRel);
-      } catch {
-        continue;
-      }
+      const src = readSource(ctx, wsRel);
+      if (src === undefined) continue;
       if (!/\b(query|mutation|subscription)\b/.test(src)) continue;
       const lineOf = makeLineFinder(src);
       for (const lit of gqlLiterals(src)) {

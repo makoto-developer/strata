@@ -5,7 +5,38 @@
 // 揃っている。個別に再パースせず、既存ノードの meta(file/line)から
 // 「その呼び出し行を含む関数」を引くことで呼び出し元を特定する。
 
-import type { Ctx } from '../context.ts';
+import { readFileText, type Ctx } from '../context.ts';
+
+/** ws 相対パスのソースを読む。読めないファイルは解析対象から外すだけで、走査は続ける。 */
+export function readSource(ctx: Ctx, wsRel: string): string | undefined {
+  try {
+    return readFileText(ctx, wsRel);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 関数ノードを「短い名前 → ノード id」で引ける索引。レシーバ/パッケージ修飾
+ * (`UserHandler.Get`)は落として最後の要素だけを鍵にする。
+ * lower=true なら鍵を小文字化する(GraphQL のフィールド名は大小が揺れるため)。
+ */
+export function buildShortNameIndex(ctx: Ctx, lower = false): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const node of ctx.builder.nodes.values()) {
+    if (node.kind !== 'func') continue;
+    const label = node.label;
+    const short = label.includes('.') ? label.slice(label.lastIndexOf('.') + 1) : label;
+    const key = lower ? short.toLowerCase() : short;
+    let list = index.get(key);
+    if (!list) {
+      list = [];
+      index.set(key, list);
+    }
+    list.push(node.id);
+  }
+  return index;
+}
 
 /** ノード id からトップレベル(サービス/モジュール)の祖先 id を返す。 */
 export function topAncestorId(ctx: Ctx, id: string): string {

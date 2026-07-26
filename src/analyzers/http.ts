@@ -16,16 +16,17 @@
 //
 // 無効化: strata.config.json の { "http": { "enabled": false } }
 
-import { readFileText, type Ctx, type Project } from '../context.ts';
+import type { Ctx } from '../context.ts';
 import { makeLineFinder, matchBrace, stripSource } from '../lex.ts';
 import {
   buildFuncIndex,
+  buildShortNameIndex,
   enclosingNodeId,
   looksLikeWebhook,
   normalizePath,
   pathKey,
+  readSource,
   topAncestorId,
-  type FuncIndex,
 } from './endpoints.ts';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -418,13 +419,7 @@ export function detectHttp(ctx: Ctx): void {
   const calls: CallRec[] = [];
 
   for (const project of ctx.projects) {
-    const read = (rel: string): string | undefined => {
-      try {
-        return readFileText(ctx, rel);
-      } catch {
-        return undefined;
-      }
-    };
+    const read = (rel: string): string | undefined => readSource(ctx, rel);
     for (const rel of project.goFiles) {
       const src = read(rel);
       if (src) scanGo(src, rel, routes, calls);
@@ -486,13 +481,7 @@ export function detectHttp(ctx: Ctx): void {
   }
 
   // ハンドラ実装への impl 辺(同一サービス内で名前が一意に決まるときだけ)
-  const funcByName = new Map<string, string[]>();
-  for (const node of ctx.builder.nodes.values()) {
-    if (node.kind !== 'func') continue;
-    const short = node.label.includes('.') ? node.label.slice(node.label.lastIndexOf('.') + 1) : node.label;
-    if (!funcByName.has(short)) funcByName.set(short, []);
-    funcByName.get(short)!.push(node.id);
-  }
+  const funcByName = buildShortNameIndex(ctx);
   for (const { id, rec } of routeIds) {
     if (!rec.handler) continue;
     const parts = rec.handler.replace(/[()]/g, '').split('.');
