@@ -53,7 +53,10 @@ macOS(Apple Silicon)なら[単一実行ファイル]({{ site.baseurl }}/getting-
 | --- | --- |
 | なぜこういう設計なのかを知りたい | [なぜこの形なのか]({{ site.baseurl }}/why/) |
 | とりあえず動かしたい | [インストールと最初の一歩]({{ site.baseurl }}/getting-started/) |
-| 画面の見方を知りたい | [ビューアの使い方]({{ site.baseurl }}/guide/viewer/) |
+| 画面の見方を知りたい | [画面の全体像]({{ site.baseurl }}/guide/viewer/) |
+| ボタンの機能を知りたい | [ボタンと操作の一覧]({{ site.baseurl }}/guide/toolbar/)(画像つき) |
+| 線や色の意味を知りたい | [構造ビューの読み方]({{ site.baseurl }}/guide/read-structure/)(画像つき) |
+| API の追い方を知りたい | [API タブの読み方]({{ site.baseurl }}/guide/api-tab/)(画像つき) |
 | gRPC 以外(REST / GraphQL)も追いたい | [プロトコル横断の追跡]({{ site.baseurl }}/guide/protocols/) |
 | CI に組み込みたい | [CI で構造を守る]({{ site.baseurl }}/guide/ci/) |
 | コマンド・設定を調べたい | [CLI リファレンス]({{ site.baseurl }}/reference/cli/) / [設定リファレンス]({{ site.baseurl }}/reference/config/) |
