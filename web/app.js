@@ -789,10 +789,14 @@
       state.bookmarks.size > 0
         ? ` ・ <b class="bm-badge" title="クリックでブックマーク一覧">★ ${state.bookmarks.size}</b>`
         : '';
+    statsEl.title =
+      'nodes = グラフに載っているノード数 / deps = 依存の本数 / ' +
+      '循環 = 互いに依存し合っているグループ数 / 上向き = レイヤー違反の線の本数\n' +
+      '「循環」をクリックすると一覧、「上向き」は違反の線だけを絞り込めます';
     statsEl.innerHTML =
       `${model.nodes.length} nodes ・ ${model.edges.length} deps ・ ` +
-      `<b class="cyc-badge" title="クリックで循環一覧">循環 ${cycleGroups.length}</b> ・ ` +
-      `<b class="up-badge">上向き ${upCount}</b>` +
+      `<b class="cyc-badge" title="クリックすると循環しているノードの一覧を表示します">循環 ${cycleGroups.length}</b> ・ ` +
+      `<b class="up-badge" title="レイヤー違反(下の層 → 上の層)の線の本数。ツールバーの「⚠ レイヤー違反のみ」で絞り込めます">上向き ${upCount}</b>` +
       bmBadge +
       hiddenBadge;
     statsEl.querySelector('.cyc-badge').addEventListener('click', () => {
@@ -1451,10 +1455,14 @@
           const docLine = meta.doc
             ? `<div class="rpcdoc" title="${esc(meta.doc)}">${esc(meta.doc)}</div>`
             : '';
+          const hoverInfo =
+            `${label}${meta.doc ? ' — ' + meta.doc : ''}\n` +
+            `呼び出し元: ${callers.size > 0 ? [...callerSvcs].join(', ') : '未検出'}\n` +
+            'クリックすると呼び出し元(上流)と実装からのフロー(下流)を表示します';
           rpcItems.set(id, {
             calls: callers.size,
             html:
-              `<li class="rpc-item${selected}" data-rpc="${esc(id)}">⚡ ${esc(shortLabel)}${str}${dep}${warn}${dead}` +
+              `<li class="rpc-item${selected}" data-rpc="${esc(id)}" title="${esc(hoverInfo)}">⚡ ${esc(shortLabel)}${str}${dep}${warn}${dead}` +
               `<span class="cnt" title="呼び出し元サービス">${callers.size > 0 ? [...callerSvcs].map(esc).join(', ') : ''}</span>` +
               docLine +
               `</li>`,
@@ -1531,8 +1539,12 @@
             ? ' <span class="warnmark badge-dead" title="呼び出し元が未検出(このリポジトリ内からは呼ばれていない)">呼び出し元なし</span>'
             : '';
         const selected = state.apiRpc === n.id ? ' selected' : '';
+        const surfaceHover =
+          `${n.label}${meta.framework ? ' (' + meta.framework + ')' : ''}\n` +
+          `呼び出し元: ${callers.size > 0 ? [...callerSvcs].join(', ') : '未検出'}\n` +
+          'クリックすると呼び出し元(上流)と実装からのフロー(下流)を表示します';
         bySvc.get(svc).push(
-          `<li class="rpc-item${selected}" data-rpc="${esc(n.id)}">${icon} ${esc(n.label)}${extraChips(n)}${warn}${dead}` +
+          `<li class="rpc-item${selected}" data-rpc="${esc(n.id)}" title="${esc(surfaceHover)}">${icon} ${esc(n.label)}${extraChips(n)}${warn}${dead}` +
             `<span class="cnt" title="呼び出し元">${callers.size > 0 ? [...callerSvcs].map(esc).join(', ') : ''}</span></li>`,
         );
         if (icon === '⇄') routeShown++;
@@ -1561,7 +1573,9 @@
       const m = n.meta || {};
       return (
         (m.webhook ? ' <span class="warnmark badge-hook" title="webhook の受信口">webhook</span>' : '') +
-        (m.framework ? ` <span class="warnmark badge-fw">${esc(m.framework)}</span>` : '')
+        (m.framework
+          ? ` <span class="warnmark badge-fw" title="検出したフレームワーク: ${esc(m.framework)}">${esc(m.framework)}</span>`
+          : '')
       );
     }, SURFACE_HTTP_ID);
     const gqlSection = surfaceSection(gqlNodes, '◈', 'GraphQL', (n) => {
@@ -2756,6 +2770,7 @@
       const sub = parts.join(' ・ ');
       svg.push(
         `<g class="dg-node k-${n.kind}${id.startsWith('ext:') ? ' external' : ''}${state.focus === id ? ' focused' : ''}" data-node="${esc(id)}">` +
+          `<title>${esc(labelOf(id))}${sub ? ' — ' + esc(sub) : ''}\nクリックすると依存元・依存先・公開 API を表示します</title>` +
           `<rect x="${p.x - p.w / 2}" y="${p.y - BOXH / 2}" width="${p.w}" height="${BOXH}" rx="10"/>` +
           `<text x="${p.x}" y="${p.y - 4}" class="dg-label">${esc(labelOf(id))}</text>` +
           `<text x="${p.x}" y="${p.y + 15}" class="dg-sub">${esc(sub)}</text>` +
@@ -2931,7 +2946,8 @@
           `<form class="pedit hidden" data-editform="${esc(p.path)}">` +
           `<label>表示名<input type="text" name="name" value="${esc(p.name)}"></label>` +
           `<label>パス<input type="text" name="newPath" value="${esc(p.path)}"${p.composite ? ' disabled title="複合プロジェクトのパスは編集できません"' : ''}></label>` +
-          `<div class="peditbtns"><button type="submit">保存</button><button type="button" data-editcancel="1">取消</button>` +
+          `<div class="peditbtns"><button type="submit" title="表示名とパスの変更を保存する(ディレクトリ自体は動きません)">保存</button>` +
+          `<button type="button" data-editcancel="1" title="編集をやめて閉じる">取消</button>` +
           `<span class="pediterr sub"></span></div></form>` +
           `</div>`
         );
@@ -2960,7 +2976,7 @@
 例:
 ~/work/github.com/org/backend
 ~/work/github.com/org/frontend"></textarea>` +
-      `<div class="paddrow"><button id="comp-add">複合プロジェクトを作成</button></div>` +
+      `<div class="paddrow"><button id="comp-add" title="入力した複数リポジトリを 1 つのワークスペースとして束ね、まとめて解析できるようにする">複合プロジェクトを作成</button></div>` +
       `<div id="comp-msg" class="sub"></div>` +
       `</div>`;
   }

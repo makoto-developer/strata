@@ -121,11 +121,11 @@ github.com/example/services/user/internal/handler.(*Server).GetUser(...)
 </div>
 <div id="gitmodal" class="hidden"><div class="smbox" id="gitmodal-box"></div></div>
 <div id="legend">
-  <span><i class="sw down"></i>依存(下向き・正常)</span>
-  <span><i class="sw up"></i>上向き依存(レイヤー違反)</span>
-  <span><i class="sw rpc"></i>サービス境界(RPC / proto・破線)</span>
-  <span><i class="sw cycsw"></i>循環依存</span>
-  <span>● = 依存元、▶ = 依存先。行にホバー: <i class="sw outsw"></i>この行が依存する(出る線)・<i class="sw insw"></i>この行に依存してくる(入る線)。破線の流れ = 呼び出しの向き</span>
+  <span title="上の層が下の層を使っている、通常の依存です。矢じり(▶)が刺さっている側が依存先です"><i class="sw down"></i>依存(下向き・正常)</span>
+  <span title="下の層が上の層を呼んでいる依存です。設計上の逆流を示します。「⚠ レイヤー違反のみ」チップで絞り込めます"><i class="sw up"></i>上向き依存(レイヤー違反)</span>
+  <span title="サービスをまたぐ依存です(gRPC / HTTP / GraphQL / proto)。破線の流れが呼び出しの向きを表します"><i class="sw rpc"></i>サービス境界(RPC / proto・破線)</span>
+  <span title="互いに依存し合っているノードです。変更の影響が閉じないため、CI の check では既定で検出対象になります"><i class="sw cycsw"></i>循環依存</span>
+  <span title="行にカーソルを合わせると、その行に繋がる線だけが残ります">● = 依存元、▶ = 依存先。行にホバー: <i class="sw outsw"></i>この行が依存する(出る線)・<i class="sw insw"></i>この行に依存してくる(入る線)。破線の流れ = 呼び出しの向き</span>
   <span id="stats"></span>
   <span id="warnbadge" class="hidden" title="">⚠</span>
   <a id="docslink" href="https://makoto-developer.github.io/strata/" target="_blank" rel="noopener"
