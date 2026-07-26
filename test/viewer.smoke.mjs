@@ -286,6 +286,15 @@ if (entriesHtml.includes('プロセス起動点') && entriesHtml.includes('main'
 else fail('エントリーポイントタブが出ない: ' + entriesHtml.slice(0, 200));
 get('#tab-structure').fire('click');
 
+// 8.7 差分タブ: export した HTML(= このスタブと同じ静的モード)では使えないと明示する
+if (get('#tab-diff').classes.has('hidden')) ok('差分タブ: 静的 HTML ではタブを隠す');
+else fail('静的モードで差分タブが隠れていない');
+get('#tab-diff').fire('click');
+const diffHtml = get('#diffview')._html;
+if (diffHtml.includes('差分比較は使えません')) ok('差分タブ: 静的 HTML では理由を表示する');
+else fail('差分タブの静的モード表示が想定外: ' + diffHtml.slice(0, 200));
+get('#tab-structure').fire('click');
+
 // 9. スタックトレース解析
 get('#btn-stack').fire('click');
 get('#stack-input').value = `goroutine 1 [running]:

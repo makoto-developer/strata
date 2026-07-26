@@ -13,6 +13,7 @@ import { leadingComment, stripSource } from '../src/lex.ts';
 import { parseGraph } from '../src/model.ts';
 import { checkRules } from '../src/rules.ts';
 import { buildSarif } from '../src/sarif.ts';
+import { scanAtRef, splitRefRange } from '../src/gitref.ts';
 import { computeServiceMetrics } from '../src/metrics.ts';
 import { diffModels } from '../src/diff.ts';
 import { extractEnvVars } from '../src/analyzers/config.ts';
@@ -741,6 +742,75 @@ try {
     fail('graphql 選択スキャンが失敗: ' + err.message);
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });
+  }
+}
+
+// --ref: git ref の内容を一時 worktree で解析する(作業ツリーに触れない)
+{
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-ref-test-'));
+  const git = (...a) =>
+    execFileSync('git', ['-C', repo, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  try {
+    git('init', '-q', '-b', 'trunk');
+    git('config', 'user.email', 'test@example.invalid');
+    git('config', 'user.name', 'test');
+    git('config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(repo, 'go.mod'), 'module r\ngo 1.22\n');
+    fs.writeFileSync(path.join(repo, 'r.go'), 'package main\nfunc A(){}\n');
+    git('add', '-A');
+    git('commit', '-qm', 'one');
+    const first = git('rev-parse', 'HEAD').trim();
+    fs.writeFileSync(path.join(repo, 'r.go'), 'package main\nfunc A(){ B() }\nfunc B(){}\n');
+    git('add', '-A');
+    git('commit', '-qm', 'two');
+
+    // 過去コミットを解析すると、その時点の関数だけが見える
+    const old = scanAtRef(repo, first);
+    const funcs = old.nodes.filter((n) => n.kind === 'func').map((n) => n.label).sort();
+    if (funcs.join(',') === 'A' && old.ref === first) ok('--ref: 過去コミット時点のコードを解析する');
+    else fail(`--ref の解析結果が想定外: funcs=${JSON.stringify(funcs)} ref=${old.ref}`);
+
+    // 作業ツリー(現在)には B がある = worktree の中身と取り違えていない
+    const now = scan(repo);
+    if (now.nodes.some((n) => n.kind === 'func' && n.label === 'B'))
+      ok('--ref: 作業ツリー側の解析は現在の内容のまま');
+    else fail('作業ツリーの解析結果が想定外');
+
+    // 後始末: worktree 登録も一時ディレクトリも残さない
+    const worktrees = git('worktree', 'list').trim().split('\n');
+    if (worktrees.length === 1 && git('status', '--porcelain').trim() === '')
+      ok('--ref: 解析後に worktree・作業ツリーを汚さない');
+    else fail(`後始末が不十分: worktrees=${worktrees.length}`);
+
+    // 存在しない ref は理由つきで失敗する
+    let threw = '';
+    try {
+      scanAtRef(repo, 'no-such-ref');
+    } catch (err) {
+      threw = err.message;
+    }
+    if (threw.includes('ref を解決できません')) ok('--ref: 解決できない ref を明瞭に拒否');
+    else fail(`不正 ref のエラーが想定外: ${threw}`);
+
+    // git のオプションに化ける ref(先頭 -)は形式段階で弾く
+    let optThrew = '';
+    try {
+      scanAtRef(repo, '--upload-pack=x');
+    } catch (err) {
+      optThrew = err.message;
+    }
+    if (optThrew.includes('ref の形式が不正です')) ok('--ref: オプションに化ける ref を弾く');
+    else fail(`オプション混入の拒否が想定外: ${optThrew}`);
+
+    // base..head の分解
+    const r = splitRefRange('main..feature/x');
+    if (r && r.base === 'main' && r.head === 'feature/x' && splitRefRange('main') === null)
+      ok('--ref: base..head 形式を分解する');
+    else fail('splitRefRange が想定外: ' + JSON.stringify(r));
+  } catch (err) {
+    fail('--ref のテストが失敗: ' + err.message);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
   }
 }
 

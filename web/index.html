@@ -24,6 +24,7 @@
       <button id="tab-api" class="tab" title="API ビューに切り替える。gRPC・HTTP・GraphQL のカタログから、呼び出し元と下流フローを辿る">API</button>
       <button id="tab-diagram" class="tab" title="アーキテクチャ図に切り替える。サービスを箱と矢印で俯瞰し、レイヤーと境界の呼び出し数を見る">図</button>
       <button id="tab-entries" class="tab" title="エントリーポイント一覧に切り替える。プロセス起動点(main)や画面から、コードを読み始める場所を探す">エントリーポイント</button>
+      <button id="tab-diff" class="tab" title="差分ビューに切り替える。2 つの git ref を比較し、依存の増減・新規/解消した循環を見る">差分</button>
       <button id="tab-projects" class="tab" title="プロジェクト管理に切り替える。解析するリポジトリの追加・削除・切り替えを行う">プロジェクト</button>
     </div>
     <span class="spacer"></span>
@@ -100,6 +101,7 @@
   </div>
   <div id="diagramview" class="hidden"></div>
   <div id="entriesview" class="hidden"></div>
+  <div id="diffview" class="hidden"></div>
   <div id="projview" class="hidden"></div>
   <aside id="side" class="hidden"></aside>
 </div>
