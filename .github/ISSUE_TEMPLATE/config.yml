@@ -1,0 +1,10 @@
+# 質問も Issue で受ける方針(Discussions は使わない)。
+# 迷子を減らすため、空の Issue は無効にしてテンプレートを必ず選ばせる。
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 ドキュメント(使い方・設計の意図)
+    url: https://makoto-developer.github.io/strata/
+    about: 質問する前にこちらを確認してください。多くの「なぜ」はここに書いてあります。
+  - name: 🔐 脆弱性の報告
+    url: https://github.com/makoto-developer/strata/security/advisories/new
+    about: セキュリティ上の問題は公開 Issue ではなく、非公開のセキュリティ勧告から報告してください。

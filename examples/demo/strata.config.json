@@ -1,0 +1,10 @@
+{
+  "name": "demo-platform",
+  "services": [
+    { "name": "gateway", "path": "gateway" },
+    { "name": "federation", "path": "federation" },
+    { "name": "webapp", "path": "webapp" },
+    { "name": "user-service", "path": "services/user" },
+    { "name": "order-service", "path": "services/order" }
+  ]
+}

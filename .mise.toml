@@ -1,0 +1,9 @@
+# mise (https://mise.jdx.dev) 用の設定。
+# Strata は Node 22.18 以上を必要とする(TypeScript を type stripping で直接実行)。
+# このリポジトリ内で `mise install` すると対応する Node が入る。
+#
+# 利用者としてのインストール(GitHub 公開のみ):
+#   mise は Node ランタイムの供給に使い、Strata 本体は Homebrew か git 導入を推奨。
+#   asdf も同様に `.tool-versions` で nodejs 22.18 を指定すればよい(下記 README 参照)。
+[tools]
+node = "22.18"

@@ -1,0 +1,84 @@
+# Issue / PR ラベルの定義(このファイルが正)。
+# 反映: gh label create <name> --color <color> --description <desc> --force
+#
+# 3 系統に分けている:
+#   type:     何についての Issue か(必ず 1 つ付ける)
+#   status:   いま何待ちか(必ず 1 つ付ける。トリアージで更新する)
+#   area:     どこの話か(任意・複数可)
+# priority は「今すぐ直すか」だけを表す。付いていないものは通常対応。
+
+# ---- type(種別・必ず 1 つ) ----
+- name: bug
+  color: d73a4a
+  description: 不具合。期待と違う動作・クラッシュ・誤検出
+- name: enhancement
+  color: a2eeef
+  description: 新機能・既存機能の改善
+- name: question
+  color: d876e3
+  description: 使い方・設定・結果の読み方についての質問
+- name: documentation
+  color: 0075ca
+  description: README・ドキュメントサイト・SPEC の修正
+- name: refactor
+  color: c5def5
+  description: 挙動を変えない内部改善
+- name: security
+  color: b60205
+  description: セキュリティに関わる修正(脆弱性報告は非公開の Security Advisory へ)
+
+# ---- status(状態・必ず 1 つ) ----
+- name: 'status: triage'
+  color: ededed
+  description: 受け付け直後。メンテナが内容を確認中
+- name: 'status: needs info'
+  color: fef2c0
+  description: 報告者からの追加情報待ち(再現手順・バージョンなど)
+- name: 'status: accepted'
+  color: 0e8a16
+  description: 対応すると決めたもの。着手待ち
+- name: 'status: in progress'
+  color: 1d76db
+  description: 着手中
+- name: 'status: blocked'
+  color: 5319e7
+  description: 外部要因で止まっている(依存する変更・上流の不具合など)
+
+# ---- area(領域・任意) ----
+- name: 'area: analyzer'
+  color: bfd4f2
+  description: 解析エンジン(Go / TS / Python / Elixir / proto / HTTP / GraphQL)
+- name: 'area: viewer'
+  color: bfd4f2
+  description: ブラウザのビューア(web/)
+- name: 'area: cli'
+  color: bfd4f2
+  description: CLI コマンドと出力
+- name: 'area: docs'
+  color: bfd4f2
+  description: ドキュメント全般
+- name: 'area: ci'
+  color: bfd4f2
+  description: CI・リリース・配布
+
+# ---- priority(任意) ----
+- name: 'priority: high'
+  color: e11d21
+  description: 実用を妨げる。優先して直す
+- name: 'priority: low'
+  color: ededed
+  description: あると嬉しい程度。手が空いたら
+
+# ---- その他 ----
+- name: good first issue
+  color: 7057ff
+  description: 最初の貢献に向いている
+- name: help wanted
+  color: '008672'
+  description: 力を貸してほしい
+- name: duplicate
+  color: cfd3d7
+  description: 既存の Issue / PR と重複
+- name: wontfix
+  color: ffffff
+  description: 方針として対応しない(理由をコメントに残す)

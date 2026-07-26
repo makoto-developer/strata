@@ -1,0 +1,76 @@
+# タグ(v*)を push すると macOS(Apple Silicon)向けの単一実行ファイルを作って Release に添付する。
+#
+# ビルドは Apple Silicon の runner(macos-14 以降は arm64)で行う。
+# 実行ファイルの土台には CI の Node ではなく**公式ビルドの Node を固定バージョンで**使う
+# (ディストリビューション版は SEA が無効化されていることがあるため)。
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '手動実行時に添付するタグ(省略時はドラフトのみ作成)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  macos-arm64:
+    runs-on: macos-14 # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: devDependencies(typescript / @types/node)をインストール
+        run: npm ci
+
+      - name: テストと型検査(壊れたものをリリースしない)
+        run: |
+          npm run typecheck
+          npm test
+          node scripts/check-docs.mjs
+
+      - name: ビルド用ツールを一時的に入れる
+        run: npm install --no-save esbuild postject
+
+      - name: 単一実行ファイルをビルド
+        run: node scripts/build-binary.mjs --tar
+
+      - name: 生成物を確認
+        run: |
+          ls -lh dist/bin
+          file dist/bin/strata
+          ./dist/bin/strata --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strata-macos-arm64
+          path: |
+            dist/bin/strata-macos-arm64.tar.gz
+            dist/bin/strata-macos-arm64.tar.gz.sha256
+
+      - name: Release に添付
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 変更履歴は GitHub の自動生成を使い、その下にインストール手順・サポート範囲を足す
+          gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="${GITHUB_REF_NAME}" --jq .body > /tmp/notes.md || echo '' > /tmp/notes.md
+          printf '\n\n' >> /tmp/notes.md
+          cat .github/release-notes-footer.md >> /tmp/notes.md
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file /tmp/notes.md \
+            dist/bin/strata-macos-arm64.tar.gz \
+            dist/bin/strata-macos-arm64.tar.gz.sha256 \
+          || gh release upload "${GITHUB_REF_NAME}" \
+            dist/bin/strata-macos-arm64.tar.gz \
+            dist/bin/strata-macos-arm64.tar.gz.sha256 --clobber
