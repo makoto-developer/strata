@@ -1638,8 +1638,18 @@ body.tab-projects .searchwrap { display: none !important; }
 }
 #legend .sw.cycsw { background: var(--cyc-bg); height: 10px; border: 1px solid var(--cyc-fg); }
 /* AGPL: 配信しているビューアからソースへ辿れるようにする */
-#legend #srclink { color: var(--faint); text-decoration: none; white-space: nowrap; }
-#legend #srclink:hover { color: var(--accent); text-decoration: underline; }
+#legend #srclink,
+#legend #docslink { color: var(--faint); text-decoration: none; white-space: nowrap; }
+#legend #srclink:hover,
+#legend #docslink:hover { color: var(--accent); text-decoration: underline; }
+#helpmodal .helpfoot {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+#helpmodal .helpfoot a { color: var(--accent); }
 
 /* ---------- 狭い画面(〜1100px) ----------
    ツールバーと凡例が 3 段になって作業領域を圧迫するため、

@@ -1,3 +1,5 @@
+📖 **使い方の説明書: <https://makoto-developer.github.io/strata/>**
+
 ## インストール(macOS / Apple Silicon)
 
 ```sh
@@ -26,3 +28,9 @@ Intel Mac・Linux・Windows で使う場合は、Node.js 22.18 以降を入れ�
 ```sh
 xattr -d com.apple.quarantine ./strata
 ```
+
+---
+
+- 📖 説明書(使い方・設定・設計の意図): <https://makoto-developer.github.io/strata/>
+- ❓ 質問・不具合: <https://github.com/makoto-developer/strata/issues>
+- 🧪 解析対象のサンプル: <https://github.com/makoto-developer/strata-sample-platform>
