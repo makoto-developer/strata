@@ -697,6 +697,53 @@ try {
   else fail('federation のサブグラフ間参照がない');
 }
 
+// GraphQL: ルート直下の選択フィールドだけを拾う(入れ子・引数名・エイリアスに惑わされない)
+{
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-gqlsel-'));
+  fs.writeFileSync(path.join(ws, 'package.json'), '{"name":"gqlsel"}');
+  fs.writeFileSync(
+    path.join(ws, 'schema.graphql'),
+    'type Query {\n  viewer: User\n  shops(term: String, limit: Int): [Shop]\n}\ntype User {\n  id: ID\n  email: String\n}\ntype Shop {\n  id: ID\n  total: Int\n}\n',
+  );
+  fs.writeFileSync(
+    path.join(ws, 'client.js'),
+    [
+      'export function loadPage() {',
+      '  return gql`',
+      '    query Page($term: String) {',
+      '      viewer {',
+      '        id',
+      '        email',
+      '      }',
+      '      mine: shops(term: $term, limit: 10) {',
+      '        total',
+      '      }',
+      '    }',
+      '  `;',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  try {
+    const m = scan(ws);
+    const byId = new Map(m.nodes.map((n) => [n.id, n]));
+    const hit = new Set(
+      m.edges.filter((e) => e.kind === 'graphql').map((e) => byId.get(e.to)?.label),
+    );
+    // viewer と shops の両方に繋がり、入れ子(id/email/total)や引数名(term/limit)には繋がらない
+    const wanted = hit.has('Query.viewer') && hit.has('Query.shops');
+    const noise = ['id', 'email', 'total', 'term', 'limit', 'mine'].some((n) =>
+      [...hit].some((label) => label?.endsWith('.' + n)),
+    );
+    if (wanted && !noise) ok('graphql: ルート直下の選択だけを接続(入れ子・引数名・エイリアスを除外)');
+    else fail('graphql の選択解析が想定外: ' + JSON.stringify([...hit]));
+  } catch (err) {
+    fail('graphql 選択スキャンが失敗: ' + err.message);
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+}
+
 // 自己完結 HTML(export)の健全性 §8.4
 {
   const html = exportHtml(model);
