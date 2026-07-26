@@ -1,6 +1,9 @@
 # Strata
 
 [![CI](https://github.com/makoto-developer/strata/actions/workflows/ci.yml/badge.svg)](https://github.com/makoto-developer/strata/actions/workflows/ci.yml)
+[![ドキュメント](https://img.shields.io/badge/📖_ドキュメント-makoto--developer.github.io%2Fstrata-0a7368)](https://makoto-developer.github.io/strata/)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/makoto-developer/strata?label=release)](https://github.com/makoto-developer/strata/releases/latest)
 
 **マイクロサービスのコードを「層」として読むための、依存関係とコールグラフの可視化ツール。**
 gRPC・REST・GraphQL をまたいで、関数レベルで処理を追えます。
@@ -9,6 +12,12 @@ gRPC・REST・GraphQL をまたいで、関数レベルで処理を追えます�
 strata serve ./my-monorepo   # ブラウザで構造・API・アーキ図を見る
 strata check ./my-monorepo   # CI で循環依存・レイヤー違反を検査する
 ```
+
+> ### 📖 使い方の説明書 → **<https://makoto-developer.github.io/strata/>**
+>
+> インストール手順・各画面の見方・設定リファレンス・CI への組み込み方・
+> 「なぜこの設計なのか」まで、まとまった説明書があります。
+> この README は概要です。**実際に使うときはドキュメントサイトを見てください。**
 
 ## こんなことになっていませんか
 
@@ -145,8 +154,9 @@ graph LR
 
 ---
 
-📖 **[ドキュメント(使い方・設計の意図)](https://makoto-developer.github.io/strata/)** ・
-❓ **[質問は GitHub Issue へ](https://github.com/makoto-developer/strata/issues/new?template=3_question.yml)**
+📖 **[説明書(ドキュメントサイト)](https://makoto-developer.github.io/strata/)** ・
+❓ **[質問は GitHub Issue へ](https://github.com/makoto-developer/strata/issues/new?template=3_question.yml)** ・
+🧪 **[サンプルシステム](https://github.com/makoto-developer/strata-sample-platform)**
 
 ## 目次
 

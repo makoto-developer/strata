@@ -3557,7 +3557,12 @@
         '<div class="helpbox"><div class="helphead"><b>キーボード / 操作ショートカット</b>' +
         '<button class="close" data-help-close aria-label="閉じる">✕</button></div><table class="helptbl">' +
         HELP_ROWS.map((r) => `<tr><td class="k">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('') +
-        '</table></div>';
+        '</table>' +
+        // 詳しい使い方は説明書(ドキュメントサイト)へ誘導する
+        '<div class="helpfoot">📖 詳しい使い方・設定・設計の意図は ' +
+        '<a href="https://makoto-developer.github.io/strata/" target="_blank" rel="noopener">説明書(ドキュメントサイト)</a>' +
+        ' にまとまっています</div>' +
+        '</div>';
       helpEl.addEventListener('click', (ev) => {
         if (ev.target === helpEl || ev.target.closest('[data-help-close]')) helpEl.classList.add('hidden');
       });
