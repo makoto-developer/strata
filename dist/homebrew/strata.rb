@@ -24,7 +24,7 @@ class Strata < Formula
   on_macos do
     on_arm do
       url "https://github.com/makoto-developer/strata/releases/download/v0.1.0/strata-macos-arm64.tar.gz"
-      sha256 "0996ffa8b2b996836021952808b89b12d77ef3743d99ea53152283b3f97bb999"
+      sha256 "627e81b791235d75795ecb2aa12cb2ddf9dc152143092a26f57726c6ee9ee494"
 
       def install
         bin.install "strata"
@@ -33,7 +33,7 @@ class Strata < Formula
 
     on_intel do
       url "https://github.com/makoto-developer/strata/archive/refs/tags/v0.1.0.tar.gz"
-      sha256 "db1aeaa34e9be6263e6827bf8f2d917f124899a4495fd9f8dd89596f3961a470"
+      sha256 "95a76c7859e09f00fd1a1b141ea4aee2f4a59b0fde87fbf4cde9f17607602fb1"
       depends_on "node"
 
       def install
@@ -49,7 +49,7 @@ class Strata < Formula
 
   on_linux do
     url "https://github.com/makoto-developer/strata/archive/refs/tags/v0.1.0.tar.gz"
-    sha256 "db1aeaa34e9be6263e6827bf8f2d917f124899a4495fd9f8dd89596f3961a470"
+    sha256 "95a76c7859e09f00fd1a1b141ea4aee2f4a59b0fde87fbf4cde9f17607602fb1"
     depends_on "node"
 
     def install
