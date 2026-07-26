@@ -205,9 +205,17 @@ Intel Mac / Linux / Windows では下記の git clone 版を使ってくださ�
 
 ```bash
 brew tap makoto-developer/strata
+brew trust makoto-developer/strata   # 公式以外の tap は明示的な信頼が必要(Homebrew の仕様)
 brew install strata
+
+strata --version
 strata serve /path/to/your-monorepo
 ```
+
+> `brew trust` を省くと `Refusing to load formula from untrusted tap` で止まります。
+> 新しめの Homebrew が、公式以外の tap を既定では読み込まなくなったためです。
+> Apple Silicon では Node.js 同梱のバイナリが、Intel Mac / Linux ではソース + Homebrew の
+> `node` が入ります(いずれも同じ機能です)。
 
 ### mise / asdf(Node を用意して git 導入)
 

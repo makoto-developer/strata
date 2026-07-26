@@ -48,9 +48,20 @@ node src/cli.ts --help
 alias strata='node /path/to/strata/src/cli.ts'
 ```
 
-### Homebrew / mise / asdf
+### Homebrew
 
-`dist/homebrew/strata.rb` と `.mise.toml` を同梱しています。詳しくは README を参照してください。
+```sh
+brew tap makoto-developer/strata
+brew trust makoto-developer/strata   # 公式以外の tap は明示的な信頼が必要(Homebrew の仕様)
+brew install strata
+```
+
+`brew trust` を省くと `Refusing to load formula from untrusted tap` で止まります。
+Apple Silicon では Node.js 同梱のバイナリ、Intel Mac / Linux ではソース + Homebrew の `node` が入ります。
+
+### mise / asdf
+
+`.mise.toml` を同梱しています。Node を用意して git clone 版を使う形です。詳しくは README を参照してください。
 
 ## 最初の一歩
 
