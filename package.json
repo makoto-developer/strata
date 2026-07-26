@@ -16,8 +16,10 @@
   ],
   "scripts": {
     "demo": "node src/cli.ts serve examples/demo",
+    "check": "npm run typecheck && npm run lint && npm test && npm run docs:check",
     "test": "node test/cli.smoke.mjs && node test/viewer.smoke.mjs && node test/source-panel.smoke.mjs && node test/server.smoke.mjs",
     "typecheck": "tsc --noEmit",
+    "lint": "node scripts/lint.mjs",
     "docs:check": "node scripts/check-docs.mjs",
     "build:binary": "node scripts/build-binary.mjs --tar"
   },

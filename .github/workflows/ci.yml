@@ -22,6 +22,8 @@ jobs:
         run: npm ci
       - name: "型チェック (tsc --noEmit)"
         run: npm run typecheck
+      - name: "リント (このリポジトリの約束事)"
+        run: npm run lint
       - name: "テスト (CLI・解析エンジン + ビューア/サーバの DOM/HTTP スモーク)"
         run: npm test
       - name: "ドキュメントの整合性 (front matter・ナビ・内部リンク)"

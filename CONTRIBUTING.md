@@ -81,9 +81,38 @@ Strata は「取りこぼしても良いが、嘘は出さない」方針です(
 挙動を変える PR は [docs/SPEC.md](docs/SPEC.md) の該当節も更新してください。SPEC が正です。
 ユーザーから見える変更なら README とドキュメントサイト(`docs/`)も対象です。
 
+## PR を出す前に
+
+**1 コマンドで全部確認できます。**
+
+```sh
+npm run check     # 型チェック → リント → テスト → ドキュメント整合
+```
+
+内訳(個別にも実行できます):
+
+| コマンド | 何を見るか |
+| --- | --- |
+| `npm run typecheck` | TypeScript の型エラー(`tsc --noEmit`、エラー 0 を維持) |
+| `npm run lint` | このリポジトリの約束事(行末空白・タブ・`any`・`console.log`・TODO の置き忘れ) |
+| `npm test` | CLI / 解析エンジン / ビューア(DOM スタブ) / サーバ(HTTP)のスモークテスト |
+| `npm run docs:check` | ドキュメントの front matter・ナビ・内部リンク・画像参照 |
+
+`npm run check` は CI と同じ内容です。**これが緑なら CI も通ります**(devDependencies の
+インストールだけ必要: `npm ci`)。
+
+リンターに ESLint 等を使っていないのは、「実行時依存ゼロ・開発でも `npm install` を
+基本不要にする」方針のためです。汎用の整形ルールではなく、このプロジェクトが実際に
+守りたいことだけを [`scripts/lint.mjs`](scripts/lint.mjs) で見ています。
+
 ## PR の出し方
 
-1. **まずドラフトで作る**。CI が緑になり説明が書けたら Ready にしてください
+1. **まずドラフト(Draft PR)で作ってください。** レビュー可能になってから Ready にします。
+   ドラフトのうちは「作業中である」ことが一目で分かり、無駄なレビューが発生しません。
+   Ready にする条件は次の 3 つです:
+   - `npm run check` が緑
+   - PR テンプレートのチェックリストを埋めた
+   - 何を・なぜ変えるのかが説明に書いてある
 2. コミットメッセージは [Conventional Commits](https://www.conventionalcommits.org/ja/v1.0.0/) 風に
    (`feat:` / `fix:` / `docs:` / `refactor:` / `test:`)。日本語本文で構いません
 3. 1 PR = 1 目的。無関係な整形は分けてください
