@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+import { diffModels } from './diff.ts';
+import { repoRootOf, scanAtRef } from './gitref.ts';
 import { parseGraph } from './model.ts';
 import type { Graph } from './model.ts';
 import { SKIP_DIRS, scan } from './scan.ts';
@@ -215,7 +217,11 @@ function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
 
 // ---------- サーバー ----------
 
-export function serve(defaultInput: string, port: number, opts: { watch?: boolean } = {}): http.Server {
+export function serve(
+  defaultInput: string,
+  port: number,
+  opts: { watch?: boolean; ref?: string } = {},
+): http.Server {
   const dir = webDir();
   const defaultAbs = path.resolve(defaultInput);
   const defaultIsDir = fs.existsSync(defaultAbs) && fs.statSync(defaultAbs).isDirectory();
@@ -252,7 +258,7 @@ export function serve(defaultInput: string, port: number, opts: { watch?: boolea
     if (input.endsWith('.json') && fs.existsSync(input) && fs.statSync(input).isFile()) {
       return parseGraph(fs.readFileSync(input, 'utf8'), input);
     }
-    return scan(input);
+    return opts.ref ? scanAtRef(input, opts.ref) : scan(input);
   };
 
   /** `?p=` を解決する。登録済みプロジェクト以外は拒否(403 の代わりに null)。 */
@@ -585,6 +591,82 @@ export function serve(defaultInput: string, port: number, opts: { watch?: boolea
           return sendJson(404, { error: 'コミットを取得できません: ' + (err as Error).message.split('\n')[0] });
         }
       }
+      // 差分タブ用: 比較に選べる ref(ブランチ / タグ / 現在の HEAD)を返す
+      if (url === '/refs') {
+        const root = rootFor(pParam);
+        if (root === null) return sendText(403, 'unknown project');
+        const repo = repoRootOf(root);
+        if (repo === null) return sendJson(200, { git: false, branches: [], tags: [], head: null });
+        const list = async (args: string[]): Promise<string[]> => {
+          try {
+            const { stdout } = await execFileAsync('git', ['-C', repo, ...args], { maxBuffer: 4 * 1024 * 1024 });
+            return stdout
+              .split('\n')
+              .map((s) => s.split('\t'))
+              // origin/HEAD のような symref は実体ブランチと重複するので落とす
+              .filter((cols) => cols[0].trim() !== '' && (cols[1] ?? '') === '')
+              .map((cols) => cols[0].trim())
+              .slice(0, 500);
+          } catch {
+            return [];
+          }
+        };
+        const fmt = '--format=%(refname:short)%09%(symref)';
+        const [branches, tags, headOut] = await Promise.all([
+          list(['for-each-ref', fmt, '--sort=-committerdate', 'refs/heads', 'refs/remotes']),
+          list(['for-each-ref', fmt, '--sort=-creatordate', 'refs/tags']),
+          list(['rev-parse', '--abbrev-ref', 'HEAD']),
+        ]);
+        return sendJson(200, { git: true, branches, tags, head: headOut[0] ?? null });
+      }
+
+      // 差分タブ用: 2 つの ref(head 省略時は作業ツリー)を解析して構造の変化を返す。
+      // ref ごとに一時 worktree を作って丸ごと解析するため、大きなリポジトリでは数秒かかる。
+      if (url === '/diff') {
+        const root = rootFor(pParam);
+        if (root === null) return sendText(403, 'unknown project');
+        const base = u.searchParams.get('base') ?? '';
+        const head = u.searchParams.get('head') ?? '';
+        if (base === '') return sendJson(400, { error: 'base の ref を指定してください' });
+        try {
+          const a = scanAtRef(root, base);
+          const b = head === '' ? modelFor(root) : scanAtRef(root, head);
+          const repo = repoRootOf(root);
+          let repoUrl: string | null = null;
+          let pr: number | null = null;
+          if (repo !== null) {
+            try {
+              const { stdout: remote } = await execFileAsync('git', ['-C', repo, 'remote', 'get-url', 'origin']);
+              repoUrl = normalizeRepoUrl(remote);
+            } catch {
+              // リモートなしでも差分自体は出せる
+            }
+            if (head !== '') {
+              try {
+                const { stdout } = await execFileAsync(
+                  'git',
+                  ['-C', repo, 'show', '-s', '--format=%s%x1f%b', '--end-of-options', head],
+                  { maxBuffer: 1024 * 1024 },
+                );
+                const [subject, body = ''] = stdout.split('\x1f');
+                pr = detectPrNumber(subject, body);
+              } catch {
+                // PR 番号が引けなくても差分は返す
+              }
+            }
+          }
+          return sendJson(200, {
+            base,
+            head: head === '' ? null : head, // null = 作業ツリー
+            diff: diffModels(a, b),
+            repoUrl,
+            pr,
+          });
+        } catch (err) {
+          return sendJson(400, { error: (err as Error).message.split('\n')[0] });
+        }
+      }
+
       if (url === '/source') {
         const root = rootFor(pParam);
         if (root === null) return sendText(403, 'unknown project');

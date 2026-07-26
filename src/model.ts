@@ -96,6 +96,7 @@ export interface Graph {
   warnings: string[];
   rules?: ForbiddenRule[]; // strata.config.json の forbidden(あれば埋め込む)
   thresholds?: Thresholds; // strata.config.json の thresholds(あれば埋め込む)
+  ref?: string; // --ref で解析したときの git ref(作業ツリーを見たときは未設定)
 }
 
 /** ツールのバージョン。リリースタグと package.json の version と必ず一致させる

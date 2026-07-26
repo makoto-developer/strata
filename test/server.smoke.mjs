@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as http from 'node:http';
+import { execFileSync } from 'node:child_process';
 // 実ユーザーの ~/.config/strata/projects.json を汚さないよう、登録先を一時ディレクトリへ向ける
 process.env.STRATA_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-cfg-'));
 
@@ -111,6 +112,64 @@ try {
       ok('server: 見つからないパスの登録をまとめて削除できる');
     } else {
       fail(`prune が効いていない: ${JSON.stringify(pruned.json)}`);
+    }
+  }
+  // 差分タブ: /refs で ref 一覧、/diff で 2 つの ref を worktree に取り出して比較する
+  {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-git-'));
+    const git = (...args) =>
+      execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    try {
+      git('init', '-q', '-b', 'trunk');
+      git('config', 'user.email', 'test@example.invalid');
+      git('config', 'user.name', 'test');
+      // 実行環境の署名・注釈タグ強制の設定に左右されないようにする
+      git('config', 'commit.gpgsign', 'false');
+      git('config', 'tag.gpgSign', 'false');
+      git('config', 'tag.forceSignAnnotated', 'false');
+      fs.mkdirSync(path.join(repo, 'a'));
+      fs.writeFileSync(path.join(repo, 'a', 'go.mod'), 'module a\ngo 1.22\n');
+      fs.writeFileSync(path.join(repo, 'a', 'a.go'), 'package main\nfunc A(){}\n');
+      git('add', '-A');
+      git('commit', '-qm', 'base');
+      git('tag', '-a', 'v1', '-m', 'v1');
+      fs.writeFileSync(path.join(repo, 'a', 'a.go'), 'package main\nfunc A(){ B() }\nfunc B(){}\n');
+      git('add', '-A');
+      git('commit', '-qm', 'add B (#42)');
+
+      const port2 = port + 1;
+      const server2 = serve(repo, port2);
+      await new Promise((r) => setTimeout(r, 300));
+      try {
+        const refs = await (await fetch(`http://127.0.0.1:${port2}/refs`)).json();
+        if (refs.git === true && refs.head === 'trunk' && refs.tags.includes('v1'))
+          ok('server: /refs がブランチ・タグ・HEAD を返す');
+        else fail('/refs が想定外: ' + JSON.stringify(refs));
+
+        const d = await (await fetch(`http://127.0.0.1:${port2}/diff?base=v1`)).json();
+        if (d.base === 'v1' && d.head === null && d.diff.addedEdgeCount >= 1)
+          ok('server: /diff が ref と作業ツリーの差分を返す(head 省略)');
+        else fail('/diff(作業ツリー)が想定外: ' + JSON.stringify(d));
+
+        const d2 = await (await fetch(`http://127.0.0.1:${port2}/diff?base=v1&head=trunk`)).json();
+        if (d2.pr === 42) ok('server: /diff が head コミットから PR 番号を復元する');
+        else fail('/diff の PR 検出が想定外: ' + JSON.stringify(d2));
+
+        const bad = await fetch(`http://127.0.0.1:${port2}/diff?base=no-such-ref`);
+        if (bad.status === 400) ok('server: /diff は解決できない ref を 400 で拒否');
+        else fail('不正 ref が ' + bad.status);
+
+        // ref 指定の解析は一時 worktree で行うので、元のリポジトリは汚れない
+        const status = git('status', '--porcelain');
+        const worktrees = git('worktree', 'list').trim().split('\n');
+        if (status.trim() === '' && worktrees.length === 1)
+          ok('server: /diff の後に作業ツリー・worktree が残らない');
+        else fail(`後始末が不十分: status=${JSON.stringify(status)} worktrees=${worktrees.length}`);
+      } finally {
+        server2.close();
+      }
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
     }
   }
 } finally {

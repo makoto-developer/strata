@@ -678,6 +678,7 @@ ul.drill .cnt { color: var(--muted); margin-left: auto; }
 body.tab-api .structonly { display: none !important; }
 body.tab-projects .structonly { display: none !important; }
 body.tab-entries .structonly { display: none !important; }
+body.tab-diff .structonly { display: none !important; }
 body.tab-entries .searchwrap { display: none !important; }
 
 /* ---------- アーキテクチャ図タブ ---------- */
@@ -759,6 +760,70 @@ body.tab-diagram .searchwrap { display: none !important; }
   cursor: pointer;
 }
 body.tab-projects .searchwrap { display: none !important; }
+body.tab-diff .searchwrap { display: none !important; }
+
+/* ---------- 差分(2 つの git ref を比較) ---------- */
+#diffview { flex: 1; overflow: auto; padding: 28px 20px; }
+#diffview .diffwrap { max-width: 720px; margin: 0 auto; }
+#diffview h2 { margin: 0 0 4px; font-size: 18px; }
+#diffview .sub { color: var(--muted); font-size: 12px; margin: 4px 0 14px; }
+#diffview .drow {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+#diffview .drow label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+#diffview .drow select { min-width: 200px; max-width: 100%; }
+#diffview .derr { color: var(--up); }
+#diffview .dquiet { margin-top: 10px; }
+#diffview .dsummary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--raised);
+  padding: 11px 14px;
+  margin-bottom: 12px;
+}
+#diffview .dsummary .sub { margin: 0; }
+#diffview .prlink { margin-left: auto; font-size: 12px; }
+#diffview .dsec { margin: 14px 0; }
+#diffview .dsec h3 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+#diffview .dcount {
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+#diffview .dsec ul { list-style: none; margin: 0; padding: 0; }
+#diffview .dsec li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--raised);
+  padding: 6px 11px;
+  margin: 4px 0;
+  font-size: 12px;
+  word-break: break-word;
+}
+#diffview .dmark { font-weight: 700; flex-shrink: 0; }
+/* 循環は増=悪(ローズ)・減=良(緑)。依存の増減はそれ自体に良し悪しが無いので中立色にする */
+#diffview li.bad { border-left: 3px solid var(--up); }
+#diffview li.good { border-left: 3px solid var(--out); }
+#diffview li.add { border-left: 3px solid var(--in); }
+#diffview li.del { border-left: 3px solid var(--line-strong); }
+#diffview li.bad .dmark { color: var(--up); }
+#diffview li.good .dmark { color: var(--out); }
+#diffview li.add .dmark { color: var(--in); }
+#diffview li.del .dmark { color: var(--muted); }
 
 /* ---------- プロジェクト管理 ---------- */
 #projview { flex: 1; overflow: auto; padding: 28px 20px; }

@@ -12,6 +12,7 @@ import { diffModels } from './diff.ts';
 import { buildReport } from './report.ts';
 import { serve } from './server.ts';
 import { exportHtml } from './export.ts';
+import { scanAtRef, splitRefRange } from './gitref.ts';
 import { parseGraph, TOOL_VERSION } from './model.ts';
 import type { Graph, GNode } from './model.ts';
 
@@ -29,9 +30,14 @@ const HELP = `Strata — 多言語・マイクロサービス対応の依存関�
   strata report [dir|model.json] [-o report.md] アーキテクチャレポート(mermaid + Markdown)を出力
   strata metrics [dir|model.json] [--json]  サービス結合度(Ca/Ce/不安定度)を算出
   strata diff   <old> <new> [--json]        2 モデルを比較(依存増減・新規/解消の循環)
+                [dir] --ref <base>..<head>  2 つの git ref を直接比較(head 省略で作業ツリー)
   strata trace  [dir|model.json] <関数名/ID> [--up] [--depth N] コールツリーを表示
   strata init   [dir] [--force]            strata.config.json の雛形を作成
   strata --version                         バージョンを表示(不具合報告時に添えてください)
+
+共通:
+  --ref <git ref>   作業ツリーではなく、その ref の内容を解析する
+                    (一時 worktree に取り出すので、いま編集中のファイルには触れない)
 
 対応: Go / TypeScript / JavaScript / Python / Elixir / Protocol Buffers(gRPC)
 設定: ワークスペースルートの strata.config.json(docs/SPEC.md 参照)
@@ -52,7 +58,7 @@ function parseArgs(argv: string[]): Args {
   }
   for (; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '-o' || a === '--out' || a === '--port' || a === '--depth' || a === '--baseline') {
+    if (a === '-o' || a === '--out' || a === '--port' || a === '--depth' || a === '--baseline' || a === '--ref') {
       args.options.set(a.replace(/^-+/, ''), argv[++i] ?? '');
     } else if (a === '-v') {
       args.options.set('version', true); // よく使われる短縮形だけ受ける
@@ -65,12 +71,19 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-function loadModel(input: string | undefined): Graph {
+function loadModel(input: string | undefined, ref?: string): Graph {
   const target = input ?? '.';
   if (target.endsWith('.json') && fs.existsSync(target) && fs.statSync(target).isFile()) {
+    if (ref) throw new Error('--ref は model.json ではなくディレクトリに対して指定してください');
     return parseGraph(fs.readFileSync(target, 'utf8'), target);
   }
-  return scan(target);
+  return ref ? scanAtRef(target, ref) : scan(target);
+}
+
+/** コマンド共通の `--ref <git ref>`。指定がなければ undefined。 */
+function refOf(args: Args): string | undefined {
+  const ref = args.options.get('ref');
+  return typeof ref === 'string' && ref !== '' ? ref : undefined;
 }
 
 function labelOf(model: Graph, id: string): string {
@@ -234,7 +247,9 @@ function main(): void {
 
   switch (command) {
     case 'scan': {
-      const model = scan(args.positional[0] ?? '.');
+      const ref = refOf(args);
+      const target = args.positional[0] ?? '.';
+      const model = ref ? scanAtRef(target, ref) : scan(target);
       const out = args.options.get('o') ?? args.options.get('out');
       const json = JSON.stringify(model, null, 2);
       if (typeof out === 'string' && out !== '') {
@@ -285,18 +300,18 @@ function main(): void {
     case 'serve': {
       const input = args.positional[0] ?? '.';
       const port = Number(args.options.get('port') ?? 7333);
-      serve(input, port, { watch: args.options.has('watch') });
+      serve(input, port, { watch: args.options.has('watch'), ...(refOf(args) ? { ref: refOf(args)! } : {}) });
       break;
     }
     case 'export': {
-      const model = loadModel(args.positional[0]);
+      const model = loadModel(args.positional[0], refOf(args));
       const out = (args.options.get('o') as string) || (args.options.get('out') as string) || 'report.html';
       fs.writeFileSync(out, exportHtml(model));
       console.log(`書き出しました: ${path.resolve(out)}`);
       break;
     }
     case 'check': {
-      const model = loadModel(args.positional[0]);
+      const model = loadModel(args.positional[0], refOf(args));
       const violations = checkRules(model, model.rules);
       // SARIF 出力(GitHub Code Scanning 連携)。テキスト出力の代わりに構造化して出す
       if (args.options.has('sarif')) {
@@ -339,14 +354,26 @@ function main(): void {
       break;
     }
     case 'diff': {
-      if (args.positional.length < 2) {
+      // --ref base..head を渡すと、その 2 つの ref を一時 worktree に取り出して比較する
+      // (head を省くと作業ツリーと比べる)。model.json を 2 つ渡す従来の形も残す。
+      const spec = refOf(args);
+      const range = spec ? splitRefRange(spec) : null;
+      let a: Graph;
+      let b: Graph;
+      if (spec) {
+        const dir = args.positional[0] ?? '.';
+        a = scanAtRef(dir, range ? range.base : spec);
+        b = range ? scanAtRef(dir, range.head) : loadModel(dir);
+      } else if (args.positional.length >= 2) {
+        a = loadModel(args.positional[0]);
+        b = loadModel(args.positional[1]);
+      } else {
         console.error('使い方: strata diff <old: dir|model.json> <new: dir|model.json> [--json]');
-        console.error('  各 git ref で strata scan -o した model.json を渡すと、変化を比較できます');
+        console.error('        strata diff [dir] --ref <base>..<head> [--json]  2 つの git ref を比較');
+        console.error('        strata diff [dir] --ref <base> [--json]          ref と作業ツリーを比較');
         process.exitCode = 1;
         return;
       }
-      const a = loadModel(args.positional[0]);
-      const b = loadModel(args.positional[1]);
       const d = diffModels(a, b);
       if (args.options.has('json')) {
         console.log(JSON.stringify(d, null, 2));
@@ -375,7 +402,7 @@ function main(): void {
       break;
     }
     case 'metrics': {
-      const model = loadModel(args.positional[0]);
+      const model = loadModel(args.positional[0], refOf(args));
       const metrics = computeServiceMetrics(model);
       if (args.options.has('json')) {
         console.log(JSON.stringify(metrics, null, 2));
@@ -401,7 +428,7 @@ function main(): void {
       break;
     }
     case 'report': {
-      const model = loadModel(args.positional[0]);
+      const model = loadModel(args.positional[0], refOf(args));
       const md = buildReport(model);
       const out = args.options.get('o') ?? args.options.get('out');
       if (typeof out === 'string' && out !== '') {
@@ -420,7 +447,7 @@ function main(): void {
       }
       const query = args.positional[args.positional.length - 1];
       const input = args.positional.length >= 2 ? args.positional[0] : '.';
-      const model = loadModel(input);
+      const model = loadModel(input, refOf(args));
       let target = model.nodes.find((n) => n.id === query);
       if (!target) {
         const matches = model.nodes.filter(

@@ -2307,15 +2307,18 @@
     document.body.classList.toggle('tab-projects', tab === 'projects');
     document.body.classList.toggle('tab-entries', tab === 'entries');
     document.body.classList.toggle('tab-diagram', tab === 'diagram');
+    document.body.classList.toggle('tab-diff', tab === 'diff');
     $('#tab-structure').classList.toggle('active', tab === 'structure');
     $('#tab-api').classList.toggle('active', tab === 'api');
     $('#tab-entries').classList.toggle('active', tab === 'entries');
     $('#tab-diagram').classList.toggle('active', tab === 'diagram');
+    $('#tab-diff').classList.toggle('active', tab === 'diff');
     $('#tab-projects').classList.toggle('active', tab === 'projects');
     mainEl.classList.toggle('hidden', tab !== 'structure');
     apiViewEl.classList.toggle('hidden', tab !== 'api');
     entriesViewEl.classList.toggle('hidden', tab !== 'entries');
     diagramViewEl.classList.toggle('hidden', tab !== 'diagram');
+    diffViewEl.classList.toggle('hidden', tab !== 'diff');
     projViewEl.classList.toggle('hidden', tab !== 'projects');
     if (tab === 'api') {
       sideEl.classList.add('hidden');
@@ -2326,6 +2329,11 @@
     } else if (tab === 'diagram') {
       sideEl.classList.add('hidden');
       renderDiagram();
+    } else if (tab === 'diff') {
+      sideEl.classList.add('hidden');
+      renderDiff();
+      // ディープリンク(#diff)で直接開かれた場合もここで ref 一覧を取りにいく
+      if (!diffState.refs && !IS_STATIC) loadDiffRefs();
     } else if (tab === 'projects') {
       sideEl.classList.add('hidden');
       renderProjects();
@@ -2347,6 +2355,8 @@
       history.replaceState(null, '', '#entries');
     } else if (state.tab === 'diagram') {
       history.replaceState(null, '', '#diagram');
+    } else if (state.tab === 'diff') {
+      history.replaceState(null, '', '#diff');
     } else if (state.tab === 'structure') {
       // 構造ビューの焦点・検索・並びを URL に反映(リロード復元・共有用)
       const parts = [];
@@ -2361,7 +2371,7 @@
     if (typeof location === 'undefined') return;
     const raw = location.hash.slice(1);
     if (!raw) return;
-    if (raw === 'projects' || raw === 'entries' || raw === 'diagram') {
+    if (raw === 'projects' || raw === 'entries' || raw === 'diagram' || raw === 'diff') {
       setTab(raw);
       return;
     }
@@ -2902,6 +2912,128 @@
     }
   });
   $('#tab-entries').addEventListener('click', () => setTab('entries'));
+
+  // ---------- 差分タブ ----------
+  // 2 つの git ref を server 側で解析し、サービス依存の増減と循環の変化だけを見せる。
+  // ref ごとに一時 worktree を作って丸ごと解析するので、実行には数秒かかる。
+  const diffViewEl = $('#diffview');
+  if (IS_STATIC) $('#tab-diff').classList.add('hidden');
+  const diffState = { base: '', head: '', refs: null, result: null, error: '', busy: false };
+
+  function diffOptions(selected, includeWorktree) {
+    const refs = diffState.refs || { branches: [], tags: [] };
+    const opt = (v, label) =>
+      `<option value="${esc(v)}"${v === selected ? ' selected' : ''}>${esc(label)}</option>`;
+    let html = includeWorktree ? opt('', '作業ツリー(未コミットを含む現在の状態)') : '';
+    if (refs.branches.length) {
+      html += `<optgroup label="ブランチ">${refs.branches.map((b) => opt(b, b)).join('')}</optgroup>`;
+    }
+    if (refs.tags.length) {
+      html += `<optgroup label="タグ">${refs.tags.map((t) => opt(t, t)).join('')}</optgroup>`;
+    }
+    return html;
+  }
+
+  function diffSection(title, items, mark, cls) {
+    if (!items || items.length === 0) return '';
+    const rows = items
+      .map((it) => `<li class="${cls}"><span class="dmark">${mark}</span>${esc(it)}</li>`)
+      .join('');
+    return `<div class="dsec"><h3>${esc(title)} <span class="dcount">${items.length}</span></h3><ul>${rows}</ul></div>`;
+  }
+
+  function diffResultHtml() {
+    const d = diffState.result;
+    if (!d) return '';
+    const diff = d.diff;
+    const quiet =
+      diff.addedServiceDeps.length === 0 &&
+      diff.removedServiceDeps.length === 0 &&
+      diff.newCycles.length === 0 &&
+      diff.resolvedCycles.length === 0;
+    const prLink =
+      d.pr && d.repoUrl
+        ? `<a class="prlink" href="${esc(d.repoUrl)}/pull/${d.pr}" target="_blank" rel="noreferrer noopener">PR #${d.pr} を開く</a>`
+        : '';
+    return (
+      `<div class="dsummary"><b>${esc(d.base)}</b> → <b>${esc(d.head || '作業ツリー')}</b>` +
+      `<span class="sub">エッジ +${diff.addedEdgeCount} / -${diff.removedEdgeCount}</span>${prLink}</div>` +
+      diffSection('⚠ 新規に発生した循環', diff.newCycles, '+', 'bad') +
+      diffSection('✅ 解消された循環', diff.resolvedCycles, '-', 'good') +
+      diffSection('新規サービス依存', diff.addedServiceDeps, '+', 'add') +
+      diffSection('消えたサービス依存', diff.removedServiceDeps, '-', 'del') +
+      (quiet ? '<div class="sub dquiet">サービス依存・循環に構造的な変化はありません</div>' : '')
+    );
+  }
+
+  function renderDiff() {
+    if (IS_STATIC) {
+      diffViewEl.innerHTML =
+        '<div class="diffwrap"><div class="sub">エクスポートされた HTML では差分比較は使えません(git が必要です)</div></div>';
+      return;
+    }
+    if (diffState.refs && diffState.refs.git === false) {
+      diffViewEl.innerHTML =
+        '<div class="diffwrap"><div class="sub">このプロジェクトは git リポジトリではないため、差分比較は使えません</div></div>';
+      return;
+    }
+    diffViewEl.innerHTML =
+      `<div class="diffwrap">` +
+      `<h2>差分</h2>` +
+      `<div class="sub">2 つの git ref を解析して、サービス依存の増減と循環の変化を比べます。` +
+      `ref ごとに一時 worktree を作るので、いま編集中のファイルには触れません</div>` +
+      `<div class="drow">` +
+      `<label>比較元<select id="diff-base" title="比較の基準にする ref(例: main)">${diffOptions(diffState.base, false)}</select></label>` +
+      `<label>比較先<select id="diff-head" title="比較する ref。作業ツリーを選ぶと未コミットの変更も含めて比べます">${diffOptions(diffState.head, true)}</select></label>` +
+      `<button id="diff-run"${diffState.busy ? ' disabled' : ''} title="2 つの ref を解析して差分を出す(数秒かかります)">${diffState.busy ? '解析中…' : '比較する'}</button>` +
+      `</div>` +
+      (diffState.error ? `<div class="sub derr">${esc(diffState.error)}</div>` : '') +
+      diffResultHtml() +
+      `</div>`;
+  }
+
+  async function loadDiffRefs() {
+    try {
+      const r = await fetch('refs' + projQS('?'));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      diffState.refs = await r.json();
+      if (!diffState.base) diffState.base = diffState.refs.head || (diffState.refs.branches || [])[0] || '';
+    } catch (err) {
+      diffState.error = 'ref 一覧を取得できません: ' + String(err);
+    }
+    renderDiff();
+  }
+
+  async function runDiff() {
+    if (diffState.busy) return;
+    diffState.busy = true;
+    diffState.error = '';
+    diffState.result = null;
+    renderDiff();
+    try {
+      const q = new URLSearchParams({ base: diffState.base });
+      if (diffState.head) q.set('head', diffState.head);
+      const r = await fetch('diff?' + q.toString() + projQS('&'));
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+      diffState.result = data;
+    } catch (err) {
+      diffState.error = String((err && err.message) || err);
+    } finally {
+      diffState.busy = false;
+      renderDiff();
+    }
+  }
+
+  diffViewEl.addEventListener('change', (ev) => {
+    const el = ev.target;
+    if (el.id === 'diff-base') diffState.base = el.value;
+    else if (el.id === 'diff-head') diffState.head = el.value;
+  });
+  diffViewEl.addEventListener('click', (ev) => {
+    if (ev.target.closest('#diff-run')) runDiff();
+  });
+  $('#tab-diff').addEventListener('click', () => setTab('diff'));
 
   // ---------- プロジェクト管理タブ ----------
   const projViewEl = $('#projview');
