@@ -1,0 +1,81 @@
+{
+  "name": "strata-cli",
+  "version": "0.1.0",
+  "description": "多言語(Go / TypeScript / JavaScript / Python / Elixir / Protocol Buffers / GraphQL)・マイクロサービス対応の依存関係可視化・コールグラフ探索・アーキテクチャ検査ツール。gRPC / REST / GraphQL をまたいで関数レベルで処理を追跡し、循環依存とレイヤー違反を CI で検査する",
+  "type": "module",
+  "bin": {
+    "strata": "./src/cli.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "scripts": {
+    "demo": "node src/cli.ts serve examples/demo",
+    "test": "node test/cli.smoke.mjs && node test/viewer.smoke.mjs && node test/source-panel.smoke.mjs && node test/server.smoke.mjs",
+    "typecheck": "tsc --noEmit",
+    "docs:check": "node scripts/check-docs.mjs",
+    "build:binary": "node scripts/build-binary.mjs --tar"
+  },
+  "keywords": [
+    "dependency-graph",
+    "call-graph",
+    "code-analysis",
+    "static-analysis",
+    "monorepo",
+    "microservices",
+    "architecture",
+    "visualization",
+    "grpc",
+    "protobuf",
+    "graphql",
+    "rest-api",
+    "golang",
+    "typescript",
+    "python",
+    "elixir",
+    "developer-tools",
+    "cli"
+  ],
+  "author": {
+    "name": "makoto-developer",
+    "url": "https://github.com/makoto-developer"
+  },
+  "maintainers": [
+    {
+      "name": "makoto-developer",
+      "url": "https://github.com/makoto-developer"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/makoto-developer/strata.git"
+  },
+  "homepage": "https://makoto-developer.github.io/strata/",
+  "bugs": {
+    "url": "https://github.com/makoto-developer/strata/issues"
+  },
+  "files": [
+    "src",
+    "web",
+    "docs",
+    "examples",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "SUPPORT.md",
+    "CODE_OF_CONDUCT.md"
+  ],
+  "//": "private:true は npm への誤公開を防ぐため(npm の strata / strata-cli は他者が取得済み)。配布は GitHub Releases + Homebrew / mise / asdf",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.9.3"
+  }
+}

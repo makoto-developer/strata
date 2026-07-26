@@ -1,0 +1,19 @@
+# federation サブグラフのスキーマ(Strata の GraphQL 検出フィクスチャ)
+type Query {
+  user(id: ID!): User
+  orders(userId: ID!): [Order!]!
+}
+
+type Mutation {
+  createOrder(userId: ID!, sku: String!): Order!
+}
+
+type User @key(fields: "id") {
+  id: ID!
+  name: String!
+}
+
+type Order {
+  id: ID!
+  sku: String!
+}

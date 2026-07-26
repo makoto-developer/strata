@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package user.v1;
+
+option go_package = "example.com/platform/proto/user/v1;userv1";
+
+service UserService {
+  // ユーザーを ID で 1 件取得する
+  rpc GetUser(GetUserRequest) returns (GetUserReply);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersReply);
+  rpc WatchUsers(ListUsersRequest) returns (stream GetUserReply);
+  rpc LegacyGetUser(GetUserRequest) returns (GetUserReply) {
+    option deprecated = true;
+  }
+  // 頭字語入りの RPC 名(snake_case 変換の突き合わせテスト用)
+  rpc GetUserByID(GetUserRequest) returns (GetUserReply);
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message GetUserReply {
+  string name = 1;
+}
+
+message ListUsersRequest {}
+
+message ListUsersReply {
+  repeated GetUserReply users = 1;
+}

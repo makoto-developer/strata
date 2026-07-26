@@ -1,0 +1,27 @@
+# ドキュメントサイトの設定。
+# GitHub Pages 組み込みの Jekyll は 3.9 系で just-the-docs の現行版が動かないため、
+# .github/workflows/pages.yml で Jekyll 4 を使ってビルドし、成果物をデプロイする。
+# ローカル確認: cd docs && bundle install && bundle exec jekyll serve
+title: Strata
+description: 多言語・マイクロサービス対応の依存関係可視化ツール
+theme: just-the-docs
+url: https://makoto-developer.github.io
+baseurl: /strata
+permalink: pretty
+
+color_scheme: dark
+search_enabled: true
+heading_anchors: true
+
+aux_links:
+  GitHub: https://github.com/makoto-developer/strata
+  質問する(Issue): https://github.com/makoto-developer/strata/issues/new?template=3_question.yml
+
+nav_external_links:
+  - title: GitHub リポジトリ
+    url: https://github.com/makoto-developer/strata
+
+footer_content: 'AGPL-3.0-only / 質問は <a href="https://github.com/makoto-developer/strata/issues/new?template=3_question.yml">GitHub Issue</a> へ'
+
+exclude:
+  - assets/*.gif.md

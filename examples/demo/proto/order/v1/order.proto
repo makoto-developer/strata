@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package order.v1;
+
+import "user/v1/user.proto";
+
+option go_package = "example.com/platform/proto/order/v1;orderv1";
+
+service OrderService {
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersReply);
+}
+
+message ListOrdersRequest {
+  string user_id = 1;
+}
+
+message Order {
+  string id = 1;
+  user.v1.GetUserReply buyer = 2;
+}
+
+message ListOrdersReply {
+  repeated Order orders = 1;
+}

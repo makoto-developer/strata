@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strata</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2020%2020'%3E%3Crect%20x='2'%20y='3.5'%20width='16'%20height='3.4'%20rx='1.7'%20fill='%232dd4bf'/%3E%3Crect%20x='4.5'%20y='8.6'%20width='11'%20height='3.4'%20rx='1.7'%20fill='%232dd4bf'%20opacity='.55'/%3E%3Crect%20x='7'%20y='13.7'%20width='6'%20height='3.4'%20rx='1.7'%20fill='%23f59e0b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="bar bar-main">
+    <span id="title">
+      <svg id="logo" width="19" height="19" viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="2" y="3.5" width="16" height="3.4" rx="1.7" class="s1"/>
+        <rect x="4.5" y="8.6" width="11" height="3.4" rx="1.7" class="s2"/>
+        <rect x="7" y="13.7" width="6" height="3.4" rx="1.7" class="s3"/>
+      </svg>
+      <b>Strata</b>
+      <span id="wsname"></span>
+    </span>
+    <div class="group tabs" role="tablist">
+      <button id="tab-structure" class="tab active" title="構造ビューに切り替える。ツリー + 依存線で、どのモジュールがどこに依存しているかを見る">構造</button>
+      <button id="tab-api" class="tab" title="API ビューに切り替える。gRPC・HTTP・GraphQL のカタログから、呼び出し元と下流フローを辿る">API</button>
+      <button id="tab-diagram" class="tab" title="アーキテクチャ図に切り替える。サービスを箱と矢印で俯瞰し、レイヤーと境界の呼び出し数を見る">図</button>
+      <button id="tab-entries" class="tab" title="エントリーポイント一覧に切り替える。プロセス起動点(main)や画面から、コードを読み始める場所を探す">エントリーポイント</button>
+      <button id="tab-projects" class="tab" title="プロジェクト管理に切り替える。解析するリポジトリの追加・削除・切り替えを行う">プロジェクト</button>
+    </div>
+    <span class="spacer"></span>
+    <span class="searchwrap">
+      <span class="sicon" aria-hidden="true">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>
+        </svg>
+      </span>
+      <input id="search" type="search" placeholder="検索…  ( / で移動)"
+        title="ノード名で絞り込む(一致した行だけを残す)。ショートカット: / で検索へ / ↑↓ で行移動 / →← で展開・折りたたみ / Enter で開閉 / Esc で選択解除・閉じる / Alt+←→ で戻る・進む">
+    </span>
+    <span id="searchfilters" class="structonly">
+      <button class="chip" data-sf="notest" title="クリックでテスト関連(testsupport / test-client / *_test など)を表示から除外する">テストを除外</button>
+      <button class="chip" data-sf="func" title="クリックで検索対象を関数だけに絞る">ƒ 関数</button>
+      <button class="chip" data-sf="rpc" title="クリックで検索対象を API(RPC / HTTP ルート / GraphQL フィールド)だけに絞る">⚡ RPC</button>
+      <button class="chip" data-sf="file" title="クリックで検索対象をファイル / proto だけに絞る">ファイル</button>
+    </span>
+    <span class="sep"></span>
+    <div class="group seg">
+      <button id="btn-back" title="1 つ前に見ていたノードへ戻る(Alt+←)" disabled>←</button>
+      <button id="btn-fwd" title="戻る前のノードへ進む(Alt+→)" disabled>→</button>
+    </div>
+    <button id="btn-stack" title="スタックトレース解析を開く。panic やエラーログを貼り付けると該当する関数・行に飛べる">📋 トレース</button>
+    <button id="btn-help" class="helpbtn" title="キーボード / 操作ショートカットの一覧を開く(? キー)">?</button>
+    <button id="btn-reload" title="いまのコードを解析し直して表示を更新する(表示中の位置・検索条件は保持されます)" aria-label="再解析">⟳</button>
+    <button id="btn-theme" title="テーマ切替(自動 → ライト → ダーク)" aria-label="テーマ切替">◐</button>
+  </div>
+  <div class="bar bar-context structonly">
+    <div class="group seg">
+      <button id="btn-overview" title="サービス単位まで折りたたむ。全体の依存関係を俯瞰する">概観</button>
+      <button id="btn-modules" title="モジュール(go.mod / package.json 単位)まで展開する">モジュール</button>
+      <button id="btn-expand" title="全ノードを展開する。関数レベルまで一気に開く">全展開</button>
+      <button id="btn-collapse" title="全ノードを折りたたむ">折りたたみ</button>
+    </div>
+    <span class="sep"></span>
+    <select id="sort" title="ツリーの並び順を変える。レベル化 = 依存の少ない順に層(地層バンド)を作る">
+      <option value="level">レベル化</option>
+      <option value="alpha">名前順</option>
+      <option value="size">サイズ順</option>
+    </select>
+    <div id="struct-svc-wrap" title="表示するサービス / モジュールを 1 つに絞る。選ぶと他のトップレベルを隠す"></div>
+    <span class="sep"></span>
+    <div class="group" id="struct-kinds" title="表示する依存線の種類(クリックで各種類の表示 / 非表示を切り替える)">
+      <button class="chip skind on" data-skind="import" title="import / require による依存線の表示を切り替える">import</button>
+      <button class="chip skind on" data-skind="call" title="関数呼び出しの依存線の表示を切り替える">call</button>
+      <button class="chip skind on" data-skind="boundary" title="サービス境界(gRPC / HTTP / GraphQL / proto)を越える依存線の表示を切り替える">RPC境界</button>
+    </div>
+    <button id="violations" class="chip vio" aria-pressed="false"
+      title="レイヤー違反(下の層 → 上の層 の上向き依存)の線だけを描画します。行はすべて表示されたままです">⚠ レイヤー違反のみ</button>
+  </div>
+</header>
+<div id="layout">
+  <div id="main">
+    <svg id="arcs" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="vio-empty" class="hidden">⚠ レイヤー違反(上向き依存)はありません — チップを解除すると通常の依存線に戻ります</div>
+    <div id="tree"></div>
+  </div>
+  <div id="apiview" class="hidden">
+    <div id="apilist"></div>
+    <div id="apiflow"></div>
+    <div id="apisrc" class="hidden"></div>
+  </div>
+  <div id="diagramview" class="hidden"></div>
+  <div id="entriesview" class="hidden"></div>
+  <div id="projview" class="hidden"></div>
+  <aside id="side" class="hidden"></aside>
+</div>
+<div id="defpeek" class="hidden"></div>
+<div id="stackmodal" class="hidden">
+  <div class="smbox">
+    <div class="smhead">
+      <b>スタックトレース解析</b>
+      <span class="sub">panic・エラーログ・スタックトレースを貼り付けると、該当する関数・ファイルに飛べます</span>
+      <button class="close" id="stack-close" title="閉じる">✕</button>
+    </div>
+    <textarea id="stack-input" placeholder="例:
+goroutine 1 [running]:
+github.com/example/services/user/internal/handler.(*Server).GetUser(...)
+        /app/services/user/internal/handler/handler.go:31 +0x1c"></textarea>
+    <div class="smactions"><button id="stack-parse">解析する</button><span id="stack-note" class="sub"></span></div>
+    <div id="stack-results"></div>
+  </div>
+</div>
+<div id="gitmodal" class="hidden"><div class="smbox" id="gitmodal-box"></div></div>
+<div id="legend">
+  <span><i class="sw down"></i>依存(下向き・正常)</span>
+  <span><i class="sw up"></i>上向き依存(レイヤー違反)</span>
+  <span><i class="sw rpc"></i>サービス境界(RPC / proto・破線)</span>
+  <span><i class="sw cycsw"></i>循環依存</span>
+  <span>● = 依存元、▶ = 依存先。行にホバー: <i class="sw outsw"></i>この行が依存する(出る線)・<i class="sw insw"></i>この行に依存してくる(入る線)。破線の流れ = 呼び出しの向き</span>
+  <span id="stats"></span>
+  <span id="warnbadge" class="hidden" title="">⚠</span>
+  <a id="srclink" href="https://github.com/makoto-developer/strata" target="_blank" rel="noopener"
+     title="Strata のソースコード(AGPL-3.0-only)。改変版をネットワーク越しに提供する場合はソース公開義務があります">Strata <span id="srcver"></span> · ソース</a>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

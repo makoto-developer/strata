@@ -1,0 +1,49 @@
+name: 🐛 バグ報告
+description: 解析結果がおかしい・落ちる・表示が壊れる
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        再現できないものは直せません。**再現手順**と**実際の出力**をできるだけそのまま貼ってください。
+  - type: textarea
+    attributes:
+      label: 何が起きたか
+      description: 期待した結果と、実際の結果を書いてください。
+      placeholder: |
+        期待: order → payment の RPC 依存が出る
+        実際: 依存線が出ない(API タブでは「未使用?」になる)
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 再現手順
+      description: 実行したコマンドをそのまま貼ってください。
+      placeholder: |
+        1. strata scan ./my-repo -o model.json
+        2. strata serve ./my-repo
+        3. 構造タブで order を開く
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 対象コードの最小例
+      description: |
+        可能なら、問題を再現する最小のコード片を貼ってください(社外に出せない場合は構造だけでも構いません)。
+        言語・フレームワーク(gin / Express / gqlgen など)が分かると特定が早くなります。
+      render: go
+  - type: input
+    attributes:
+      label: Strata のバージョン
+      description: "`strata --version` の出力"
+      placeholder: strata 0.1.0
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: 実行環境
+      description: OS と Node のバージョン(バイナリ版なら「バイナリ版」と書いてください)
+      placeholder: macOS 15.3 (Apple M2) / Node v24.18.0
+    validations:
+      required: true

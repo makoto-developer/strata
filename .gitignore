@@ -1,0 +1,18 @@
+node_modules/
+*.log
+strata.model.json
+report.html
+.DS_Store
+
+# GIF 録画の中間ファイル
+scripts/.rec/
+
+# デザイン確認スクリーンショット
+scripts/.shots/
+
+# バイナリビルドの生成物
+dist/bin/
+dist/.sea/
+
+# 開発用の作業メモ(公開しない)
+BACKLOG.md

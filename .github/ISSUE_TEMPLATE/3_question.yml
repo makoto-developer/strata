@@ -1,0 +1,24 @@
+name: ❓ 質問
+description: 使い方・設定・解析結果の読み方についての質問
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **このプロジェクトの質問はすべて Issue で受け付けます**(Discussions・チャットはありません)。
+        質問と回答が検索できる形で残ることを重視しているためです。遠慮なくどうぞ。
+  - type: textarea
+    attributes:
+      label: 質問
+      description: 何をしようとして、どこで詰まっているかを書いてください。
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 試したこと(任意)
+      description: 実行したコマンド・設定(strata.config.json)・ドキュメントの該当箇所など。
+      render: shell
+  - type: input
+    attributes:
+      label: Strata のバージョン(任意)
+      placeholder: strata 0.1.0

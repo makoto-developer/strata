@@ -1,0 +1,10 @@
+# order-service サブグラフ。federation の @key で federation サブグラフの User を拡張する
+extend type User @key(fields: "id") {
+  id: ID! @external
+  orders: [Order!]!
+}
+
+type Order @key(fields: "id") {
+  id: ID!
+  sku: String!
+}

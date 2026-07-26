@@ -1,0 +1,28 @@
+name: 💡 機能リクエスト
+description: 新しい解析・表示・コマンドの提案
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Strata は「**グラフに出ている依存は実在する**」ことを優先する方針です。
+        誤検出を増やす提案は採用しにくいので、**どう判定するか**まで書けると採用されやすくなります。
+  - type: textarea
+    attributes:
+      label: どんな場面で困っているか
+      description: 機能そのものより先に、解決したい状況を書いてください。
+      placeholder: マルチリポで、あるサービスだけ別ブランチの状態で全体構造を見たい
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 提案する機能
+      description: どう動くと嬉しいか。CLI なら想定するコマンド、ビューアなら想定する画面。
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 判定方法の案(任意)
+      description: |
+        解析機能の提案なら「どのパターンを検出するか」「誤検出をどう避けるか」も書いてください。
+        例: `r.GET("/x", h)` のように**パス文字列とハンドラ引数が揃っているときだけ**ルートとみなす
