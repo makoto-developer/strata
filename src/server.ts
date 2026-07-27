@@ -121,6 +121,21 @@ export function detectPrNumber(subject: string, body: string): number | null {
   return bodyRef ? Number(bodyRef[1]) : null;
 }
 
+/** `~/` を展開した絶対パスにする。 */
+function expandHome(raw: string): string {
+  return raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(2)) : path.resolve(raw);
+}
+
+/**
+ * 相対パスを弾く理由メッセージ。問題なければ null。
+ * 相対パスはサーバプロセスの cwd 基準で解決されるが、ビューアの利用者にその cwd は見えない
+ * (アプリとして起動した場合は / になる)。何が登録されるか予測できないので受け付けない。
+ */
+function relativePathError(raw: string): string | null {
+  if (raw === '' || raw.startsWith('/') || raw.startsWith('~/')) return null;
+  return `絶対パスで指定してください(/ または ~/ で始まるパス): ${raw}`;
+}
+
 function normalizeRepoUrl(remote: string): string | null {
   const trimmed = remote.trim().replace(/\.git$/, '');
   const ssh = trimmed.match(/^git@([^:]+):(.+)$/);
@@ -377,7 +392,9 @@ export function serve(
       if (url === '/projects' && req.method === 'POST') {
         const body = await readBody(req);
         const raw = typeof body.path === 'string' ? body.path.trim() : '';
-        const abs = raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(2)) : path.resolve(raw);
+        const rel = relativePathError(raw);
+        if (rel) return sendJson(400, { error: rel });
+        const abs = expandHome(raw);
         if (raw === '' || !fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) {
           return sendJson(400, { error: 'ディレクトリが見つかりません: ' + raw });
         }
@@ -392,7 +409,9 @@ export function serve(
         for (const raw of rawPaths) {
           if (typeof raw !== 'string' || raw.trim() === '') continue;
           const trimmed = raw.trim();
-          const abs = trimmed.startsWith('~/') ? path.join(os.homedir(), trimmed.slice(2)) : path.resolve(trimmed);
+          const rel = relativePathError(trimmed);
+          if (rel) return sendJson(400, { error: rel });
+          const abs = expandHome(trimmed);
           if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) {
             return sendJson(400, { error: 'ディレクトリが見つかりません: ' + trimmed });
           }
@@ -420,7 +439,9 @@ export function serve(
             return sendJson(400, { error: '複合プロジェクトのパスは編集できません(作り直してください)' });
           }
           const raw = body.newPath.trim();
-          const abs = raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(2)) : path.resolve(raw);
+          const rel = relativePathError(raw);
+          if (rel) return sendJson(400, { error: rel });
+          const abs = expandHome(raw);
           if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) {
             return sendJson(400, { error: 'ディレクトリが見つかりません: ' + raw });
           }

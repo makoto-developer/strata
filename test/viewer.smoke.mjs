@@ -286,6 +286,30 @@ if (entriesHtml.includes('プロセス起動点') && entriesHtml.includes('main'
 else fail('エントリーポイントタブが出ない: ' + entriesHtml.slice(0, 200));
 get('#tab-structure').fire('click');
 
+// 8.65 検索は「非一致を減光」方式(SPEC §8)。行数が変わらないので、件数を下部バーに出す
+{
+  const searchEl = get('#search');
+  // 検索入力は 200ms デバウンスされるので、反映を待ってから見る
+  const type = async (v) => {
+    searchEl.value = v;
+    searchEl.fire('input', { target: searchEl });
+    await new Promise((r) => setTimeout(r, 260));
+    return get('#stats')._html;
+  };
+
+  const hit = await type('gateway');
+  if (hit.includes('一致 ') && !hit.includes('一致なし')) ok('検索: 一致件数を下部バーに表示');
+  else fail('一致件数が出ない: ' + hit);
+
+  const none = await type('zzzznotexist');
+  if (none.includes('一致なし')) ok('検索: 該当ゼロを「一致なし」と伝える');
+  else fail('該当ゼロの表示が想定外: ' + none);
+
+  const cleared = await type('');
+  if (!cleared.includes('一致')) ok('検索: 解除で件数表示も消える');
+  else fail('検索解除後も件数が残る');
+}
+
 // 8.7 差分タブ: export した HTML(= このスタブと同じ静的モード)では使えないと明示する
 if (get('#tab-diff').classes.has('hidden')) ok('差分タブ: 静的 HTML ではタブを隠す');
 else fail('静的モードで差分タブが隠れていない');

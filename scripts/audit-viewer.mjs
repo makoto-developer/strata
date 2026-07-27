@@ -1,0 +1,254 @@
+// ビューアの全ボタン・全画面を実ブラウザで一通り操作し、
+// 「押しても何も起きない」「JS エラーが出る」「期待した画面が出ない」を洗い出す監査スクリプト。
+//
+// DOM スタブのスモークテスト(test/viewer.smoke.mjs)では拾えない
+// 「実ブラウザでの通信・レンダリング・イベント順序」を確認するためのもの。
+//
+// 使い方(Strata 本体はゼロ依存なので、監査ツールは都度インストールする):
+//   npm install --no-save playwright        # ブラウザは OS の Chrome を使うのでダウンロード不要
+//   node src/cli.ts serve examples/demo --port 7334 &
+//   node scripts/audit-viewer.mjs http://127.0.0.1:7334/
+//
+// 判定を書くときの注意:
+//   - 表示深度のボタンは「全展開した状態から押す」で前提を揃える(既定状態から押すと変化しない)
+//   - 検索は行を消さず非一致を減光する(SPEC §8)。行数ではなく `.row:not(.dim)` で数える
+import { chromium } from 'playwright';
+
+const url = process.argv[2];
+const browser = await chromium.launch({ channel: 'chrome' });
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const page = await ctx.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+page.on('requestfailed', (r) => errors.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
+
+const rows = [];
+const record = (name, ok, detail) => rows.push({ name, ok, detail });
+
+/** 操作前後で DOM が変わったか / 期待条件を満たすかを見る汎用チェック */
+async function probe(name, selector, expect) {
+  const before = await page.content();
+  const errBefore = errors.length;
+  try {
+    await page.click(selector, { timeout: 4000 });
+  } catch (e) {
+    record(name, false, '押せない: ' + e.message.split('\n')[0]);
+    return;
+  }
+  await page.waitForTimeout(500);
+  const after = await page.content();
+  const newErrors = errors.slice(errBefore);
+  if (newErrors.length) { record(name, false, 'JS エラー: ' + newErrors.join(' / ')); return; }
+  if (expect) {
+    const r = await expect();
+    record(name, r === true, r === true ? '' : String(r));
+    return;
+  }
+  record(name, before !== after, before !== after ? '' : '押しても DOM が変わらない');
+}
+
+const visible = (sel) => page.$eval(sel, (el) => !el.classList.contains('hidden')).catch(() => false);
+const text = (sel) => page.textContent(sel).catch(() => '');
+
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(1800);
+
+// ---------- タブ ----------
+const tabs = [
+  ['構造', '#tab-structure', '#main'],
+  ['API', '#tab-api', '#apiview'],
+  ['図', '#tab-diagram', '#diagramview'],
+  ['エントリーポイント', '#tab-entries', '#entriesview'],
+  ['差分', '#tab-diff', '#diffview'],
+  ['プロジェクト', '#tab-projects', '#projview'],
+];
+for (const [label, tab, view] of tabs) {
+  await probe(`タブ: ${label}`, tab, async () => {
+    if (!(await visible(view))) return `${view} が表示されない`;
+    const t = (await text(view)) || '';
+    if (t.trim() === '' && view !== '#main') return `${view} が空`;
+    const others = tabs.filter(([, , v]) => v !== view);
+    for (const [, , v] of others) if (await visible(v)) return `${v} が同時に表示されている`;
+    return true;
+  });
+}
+
+// ---------- 構造タブのツールバー ----------
+await page.click('#tab-structure');
+await page.waitForTimeout(400);
+const rowCount = () => page.$$eval('#tree .row', (r) => r.length);
+
+// 表示深度のボタンは「全展開した状態から押す」で揃えないと変化が出ない
+for (const [label, sel] of [['概観', '#btn-overview'], ['モジュール', '#btn-modules'], ['折りたたみ', '#btn-collapse']]) {
+  await page.click('#btn-expand');
+  await page.waitForTimeout(400);
+  const before = await rowCount();
+  await page.click(sel);
+  await page.waitForTimeout(400);
+  const after = await rowCount();
+  record(`ツールバー: ${label}`, after < before, `全展開 ${before} 行 → ${after} 行`);
+}
+{
+  await page.click('#btn-collapse');
+  await page.waitForTimeout(400);
+  const before = await rowCount();
+  await page.click('#btn-expand');
+  await page.waitForTimeout(400);
+  const after = await rowCount();
+  record('ツールバー: 全展開', after > before, `折りたたみ ${before} 行 → ${after} 行`);
+}
+
+// 検索(SPEC §8: 行は消さず、非一致を減光する。件数は下部バーに出す)
+await page.click('#btn-expand');
+await page.waitForTimeout(500);
+const lit = () => page.$$eval('#tree .row:not(.dim)', (r) => r.length);
+await page.fill('#search', 'user');
+await page.waitForTimeout(700);
+const total = await rowCount();
+const hitRows = await lit();
+const hitBadge = ((await text('#stats')) || '').includes('一致');
+record('検索: 一致を強調し非一致を減光', hitRows > 0 && hitRows < total, `全 ${total} 行中 ${hitRows} 行を強調`);
+record('検索: 件数を下部バーに表示', hitBadge, hitBadge ? '' : '「一致 n」が出ない');
+await page.fill('#search', 'zzzznotexist');
+await page.waitForTimeout(700);
+const noneBadge = ((await text('#stats')) || '').includes('一致なし');
+record('検索: 該当ゼロの明示', noneBadge && (await lit()) === 0, noneBadge ? '' : '「一致なし」が出ない');
+await page.fill('#search', '');
+await page.waitForTimeout(700);
+record('検索: 解除で全行が戻る', (await lit()) === (await rowCount()), '');
+
+// 並び替え
+const sortOpts = await page.$$eval('#sort option', (o) => o.map((x) => x.value));
+let sortOk = true;
+let sortDetail = '';
+for (const v of sortOpts) {
+  const errBefore = errors.length;
+  await page.selectOption('#sort', v);
+  await page.waitForTimeout(350);
+  const n = await rowCount();
+  if (errors.length > errBefore || n === 0) { sortOk = false; sortDetail += `${v}=NG `; }
+}
+record('並び替え(全選択肢)', sortOk, sortDetail || sortOpts.join(' / '));
+
+// テーマ切替(自動→ライト→ダーク の巡回)
+const themes = [];
+for (let i = 0; i < 3; i++) {
+  await page.click('#btn-theme');
+  await page.waitForTimeout(250);
+  themes.push(await page.evaluate(() => document.documentElement.getAttribute('data-theme') || '(自動)'));
+}
+record('テーマ切替', new Set(themes).size >= 2, themes.join(' → '));
+
+// 履歴(戻る / 進む)・再解析・ヘルプ・スタックトレース
+await probe('ヘルプ(?)', '#btn-help', async () => ((await text('body')) || '').includes('ショートカット') ? true : 'ショートカット一覧が出ない');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(300);
+
+await probe('スタックトレース', '#btn-stack', async () => (await visible('#stackmodal')) ? true : 'モーダルが開かない');
+await page.fill('#stack-input', 'handler.go:17');
+await probe('スタックトレース: 解析', '#stack-parse', async () => {
+  const t = (await text('#stack-results')) || '';
+  return t.trim() !== '' ? true : '結果が空';
+});
+await probe('スタックトレース: 閉じる', '#stack-close', async () => (await visible('#stackmodal')) ? 'モーダルが閉じない' : true);
+
+// フォーカス移動 → 戻る/進むが機能するか
+await page.click('#tab-structure');
+await page.waitForTimeout(300);
+const firstRow = await page.$('#tree .row');
+if (firstRow) { await firstRow.click(); await page.waitForTimeout(400); }
+const secondRow = (await page.$$('#tree .row'))[2];
+if (secondRow) { await secondRow.click(); await page.waitForTimeout(400); }
+await probe('履歴: 戻る', '#btn-back', async () => true);
+await probe('履歴: 進む', '#btn-fwd', async () => true);
+
+// 再解析
+await probe('再解析(⟳)', '#btn-reload', async () => ((await rowCount()) > 0 ? true : 'ツリーが空になった'));
+
+// ---------- ヘッダのリンク ----------
+for (const [label, sel] of [['説明書リンク', '#docslink'], ['ソースリンク', '#srclink'], ['ロゴ', '#logo'], ['ワークスペース名', '#wsname']]) {
+  const el = await page.$(sel);
+  if (!el) { record(label, false, '要素が無い'); continue; }
+  const href = await el.getAttribute('href');
+  record(label, true, href ? `href=${href}` : '(クリック動作)');
+}
+
+// ---------- API タブ ----------
+await page.click('#tab-api');
+await page.waitForTimeout(800);
+const apiItems = await page.$$eval('#apilist [data-rpc], #apilist .apirow, #apilist li', (e) => e.length).catch(() => 0);
+record('API: カタログ描画', apiItems > 0, `${apiItems} 件`);
+const firstApi = await page.$('#apilist [data-rpc]');
+if (firstApi) {
+  await firstApi.click();
+  await page.waitForTimeout(700);
+  const flow = ((await text('#apiflow')) || '').trim();
+  record('API: フロー表示', flow !== '', flow === '' ? 'クリックしてもフローが空' : '');
+} else {
+  record('API: フロー表示', false, '[data-rpc] が見つからない');
+}
+
+// ---------- 図タブ ----------
+await page.click('#tab-diagram');
+await page.waitForTimeout(900);
+const svgBoxes = await page.$$eval('#diagramview svg *', (e) => e.length).catch(() => 0);
+record('図: SVG 描画', svgBoxes > 0, `${svgBoxes} 要素`);
+
+// ---------- エントリーポイント ----------
+await page.click('#tab-entries');
+await page.waitForTimeout(700);
+const entryText = ((await text('#entriesview')) || '').trim();
+record('エントリーポイント: 一覧', entryText !== '', entryText === '' ? '空' : '');
+
+// ---------- 差分タブ ----------
+await page.click('#tab-diff');
+await page.waitForTimeout(1200);
+const baseOpts = await page.$$eval('#diff-base option', (o) => o.length).catch(() => 0);
+record('差分: ref 一覧の取得', baseOpts > 0, `${baseOpts} 件`);
+
+// ---------- プロジェクトタブ ----------
+await page.click('#tab-projects');
+await page.waitForTimeout(700);
+record('プロジェクト: 一覧描画', (await page.$$eval('.pcard', (c) => c.length)) > 0, '');
+
+// 空欄で追加
+await page.fill('#proj-path', '');
+const errB = errors.length;
+await page.click('#proj-add');
+await page.waitForTimeout(900);
+const emptyMsg = ((await text('#proj-msg')) || '').trim();
+record('プロジェクト: 空欄で追加', emptyMsg !== '', emptyMsg === '' ? '無反応(メッセージも通信も無い)' : emptyMsg);
+
+// 存在しないパスで追加
+await page.fill('#proj-path', '/no/such/dir');
+await page.click('#proj-add');
+await page.waitForTimeout(1200);
+const badMsg = ((await text('#proj-msg')) || '').trim();
+record('プロジェクト: 不正パスで追加', badMsg.includes('見つかりません'), badMsg || '(メッセージ無し)');
+
+// 複合プロジェクト: 不足入力
+await page.fill('#comp-name', '');
+await page.click('#comp-add');
+await page.waitForTimeout(600);
+const compMsg = ((await text('#comp-msg')) || '').trim();
+record('複合: 入力不足の案内', compMsg !== '', compMsg || '(メッセージ無し)');
+
+// 編集フォームの開閉
+const editBtn = await page.$('[data-edit]');
+if (editBtn) {
+  await editBtn.click();
+  await page.waitForTimeout(400);
+  const open = await page.$$eval('.pedit', (f) => f.some((x) => !x.classList.contains('hidden')));
+  record('プロジェクト: 編集フォーム', open, open ? '' : '開かない');
+} else {
+  record('プロジェクト: 編集フォーム', false, '[data-edit] が無い');
+}
+
+// ---------- 結果 ----------
+console.log('\n=== 監査結果 ===');
+for (const r of rows) console.log(`${r.ok ? '✓' : '✖'} ${r.name.padEnd(28)} ${r.detail}`);
+console.log(`\n合計 ${rows.length} 件 / NG ${rows.filter((r) => !r.ok).length} 件`);
+console.log('\n=== 収集した JS エラー ===');
+console.log(errors.length ? [...new Set(errors)].join('\n') : 'なし');
+await browser.close();
