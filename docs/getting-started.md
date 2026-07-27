@@ -10,28 +10,33 @@ nav_order: 3
 
 ### macOS(Apple Silicon)アプリ
 
-端末を使わずに始めたい場合はこちら。[最新リリース](https://github.com/makoto-developer/strata/releases/latest)の
-**`Strata-macos-arm64.dmg`** を開き、`Strata.app` を `Applications` へドラッグします。
+端末を使わずに始めたい場合はこちら。インストールの 1 行だけ実行してください。
 
-> **⚠️ 初回だけ、隔離属性を外す 1 行が必要です。**
-> そのまま開くと「"Strata"は壊れているため開けません。ゴミ箱に入れる必要があります。」と出ます。
-> アプリが壊れているわけではなく(署名の検証自体は通ります)、Apple の**公証を受けていない**ためです。
-> ゴミ箱には捨てず、次を 1 回だけ実行してください。
->
-> ```sh
-> xattr -dr com.apple.quarantine /Applications/Strata.app
-> ```
->
-> **macOS 15 (Sequoia) 以降は「右クリック → 開く」では回避できません**(Apple が廃止したため)。
+```sh
+curl -fsSL https://raw.githubusercontent.com/makoto-developer/strata/main/install.sh | bash
+```
 
-そのあとダブルクリックすると、初回はフォルダ選択が出るので解析したいリポジトリを選びます
-(2 回目以降は前回のフォルダで起動)。ビューアが既定のブラウザで開き、小さなウィンドウが残るので、
-終わるときは「終了」を押してください。サーバも一緒に止まります。
+`/Applications/Strata.app` に入るので、あとは Launchpad や Finder から**ダブルクリックするだけ**です。
+初回はフォルダ選択が出るので解析したいリポジトリを選びます(2 回目以降は前回のフォルダで起動)。
+ビューアが既定のブラウザで開き、小さなウィンドウが残るので、終わるときは「終了」を押してください。
+サーバも一緒に止まります。
+
+インストーラは dmg を取得してチェックサムを照合し、配置したうえで**隔離属性を外します**。
+この最後の手順が要るのは、Apple の**公証(notarization)を受けていない**ためです。
+dmg を手でドラッグした場合は、代わりに次を 1 回実行してください。
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Strata.app
+```
+
+これをしないと「"Strata"は壊れているため開けません。ゴミ箱に入れる必要があります。」と出ます。
+アプリが壊れているわけではなく、署名の検証自体は通ります。
+**macOS 15 (Sequoia) 以降は「右クリック → 開く」では回避できません**(Apple が廃止したため)。
 
 アプリの中には CLI も同梱しているので、端末からも使いたい場合は PATH に置けます。
 
 ```sh
-ln -s /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
+sudo ln -sf /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
 ```
 
 ### macOS(Apple Silicon)バイナリ
