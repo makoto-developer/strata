@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/lint.mjs",
     "docs:check": "node scripts/check-docs.mjs",
+    "audit:viewer": "node scripts/audit-viewer.mjs",
     "build:binary": "node scripts/build-binary.mjs --tar",
     "build:app": "node scripts/build-binary.mjs && node scripts/build-app.mjs --dmg"
   },

@@ -101,6 +101,16 @@ try {
     if (bad.json.error) ok('server: 存在しないパスへの編集を拒否する');
     else fail('存在しないパスへの編集が通ってしまった');
 
+    // 相対パスはサーバの cwd 基準で解決されてしまい、利用者からは何が登録されるか予測できない
+    const relAdd = await post('/projects', { path: 'examples' });
+    const relComp = await post('/projects/composite', { name: 'x', paths: ['examples', 'test'] });
+    const relEdit = await post('/projects/update', { path: ws, newPath: 'examples' });
+    const rejects = [relAdd, relComp, relEdit].every(
+      (r) => r.status === 400 && String(r.json.error).includes('絶対パス'),
+    );
+    if (rejects) ok('server: 相対パスの登録・編集を理由つきで拒否する');
+    else fail(`相対パスが通ってしまった: ${JSON.stringify([relAdd.json, relComp.json, relEdit.json])}`);
+
     // 存在しない登録を混ぜてから prune で消えることを確認する
     const ghost = path.join(os.tmpdir(), 'strata-ghost-' + Math.random().toString(36).slice(2));
     fs.mkdirSync(ghost);

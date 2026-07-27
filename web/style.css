@@ -329,6 +329,8 @@ body {
 #legend #stats { color: var(--muted); margin-left: auto; white-space: nowrap; }
 #stats b.cyc-badge { color: var(--cyc-fg); cursor: pointer; }
 #stats b.up-badge { color: var(--up); }
+#stats b.hit-badge { color: var(--accent); }
+#stats b.hit-badge.none { color: var(--up); }
 #warnbadge { cursor: help; }
 
 #layout { flex: 1; display: flex; min-height: 0; }

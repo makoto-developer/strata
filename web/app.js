@@ -793,10 +793,18 @@
       'nodes = グラフに載っているノード数 / deps = 依存の本数 / ' +
       '循環 = 互いに依存し合っているグループ数 / 上向き = レイヤー違反の線の本数\n' +
       '「循環」をクリックすると一覧、「上向き」は違反の線だけを絞り込めます';
+    // 検索は非一致を減光する方式なので、行数が変わらない。
+    // 一致件数を出さないと、0 件のときに「検索が効いていない」ように見える
+    const hitBadge = state.q
+      ? rows.filter((r) => !r.dim).length === 0
+        ? ` ・ <b class="hit-badge none" title="この検索語に一致するノードはありません">「${esc(state.q)}」に一致なし</b>`
+        : ` ・ <b class="hit-badge" title="一致した行を強調し、それ以外を減光しています">一致 ${rows.filter((r) => !r.dim).length}</b>`
+      : '';
     statsEl.innerHTML =
       `${model.nodes.length} nodes ・ ${model.edges.length} deps ・ ` +
       `<b class="cyc-badge" title="クリックすると循環しているノードの一覧を表示します">循環 ${cycleGroups.length}</b> ・ ` +
       `<b class="up-badge" title="レイヤー違反(下の層 → 上の層)の線の本数。ツールバーの「⚠ レイヤー違反のみ」で絞り込めます">上向き ${upCount}</b>` +
+      hitBadge +
       bmBadge +
       hiddenBadge;
     statsEl.querySelector('.cyc-badge').addEventListener('click', () => {
@@ -3214,7 +3222,14 @@
     if (ev.target.closest('#proj-add')) {
       const input = projViewEl.querySelector('#proj-path');
       const p = input && input.value ? input.value.trim() : '';
-      if (p === '') return;
+      const msgEl = projViewEl.querySelector('#proj-msg');
+      // 空欄のまま黙って return すると「押しても何も起きない」になる
+      if (p === '') {
+        if (msgEl) msgEl.textContent = '追加したいディレクトリのパスを入力してください(例: ~/work/my-repo)';
+        if (input) input.focus();
+        return;
+      }
+      if (msgEl) msgEl.textContent = '';
       try {
         const r = await fetch('projects', {
           method: 'POST',
