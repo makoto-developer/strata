@@ -8,9 +8,27 @@ nav_order: 3
 
 ## インストール
 
+### macOS(Apple Silicon)アプリ
+
+端末を使わずに始めたい場合はこちら。[最新リリース](https://github.com/makoto-developer/strata/releases/latest)の
+**`Strata-macos-arm64.dmg`** を開き、`Strata.app` を `Applications` へドラッグします。
+
+ダブルクリックすると、初回はフォルダ選択が出るので解析したいリポジトリを選びます
+(2 回目以降は前回のフォルダで起動)。ビューアが既定のブラウザで開き、小さなウィンドウが残るので、
+終わるときは「終了」を押してください。サーバも一緒に止まります。
+
+初回だけ Gatekeeper に止められます(ad-hoc 署名のみで Apple の公証をしていないため)。
+**`Strata.app` を右クリック → 「開く」**を選び、確認ダイアログでもう一度「開く」を押してください。
+
+アプリの中には CLI も同梱しているので、端末からも使いたい場合は PATH に置けます。
+
+```sh
+ln -s /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
+```
+
 ### macOS(Apple Silicon)バイナリ
 
-Node.js を入れずに使えます。ランタイムを同梱した単一実行ファイルです。
+CLI だけ欲しい場合。Node.js を入れずに使えます。ランタイムを同梱した単一実行ファイルです。
 
 ```sh
 curl -fsSL https://github.com/makoto-developer/strata/releases/latest/download/strata-macos-arm64.tar.gz | tar xz

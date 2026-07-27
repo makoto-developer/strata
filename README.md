@@ -195,7 +195,32 @@ Go/Python 等のツールチェーンは**不要**(テキスト・構文レベ�
 
 配布は **GitHub 公開のみ**(npm には公開していません)。
 
-### macOS(Apple Silicon)バイナリ
+### macOS(Apple Silicon)アプリ — 端末を使わない人はこれ
+
+[最新リリース](https://github.com/makoto-developer/strata/releases/latest)から
+**`Strata-macos-arm64.dmg`** を落とし、`Strata.app` を `Applications` へドラッグします。
+
+ダブルクリックすると:
+
+1. 初回はフォルダ選択が出るので、解析したいリポジトリを選ぶ(2 回目以降は前回のフォルダで起動)
+2. ビューアが既定のブラウザで開く
+3. 小さなウィンドウが残るので、終わるときは「終了」を押す(サーバも一緒に止まります)
+
+別のリポジトリに切り替えたいときは、そのウィンドウの「別のフォルダ…」か、
+ビューアの「プロジェクト」タブから追加・切り替えができます。
+
+> 初回だけ Gatekeeper に止められます(ad-hoc 署名のみで Apple の公証をしていないため)。
+> **`Strata.app` を右クリック → 「開く」** を選び、確認ダイアログでもう一度「開く」を押してください。
+> 2 回目以降はダブルクリックで起動します。
+
+アプリの中には CLI も同梱しています。端末からも使いたい場合はこれを PATH に置けます:
+
+```sh
+ln -s /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
+strata --version
+```
+
+### macOS(Apple Silicon)バイナリ — CLI だけ欲しい人はこれ
 
 Node.js のインストール不要。ランタイム同梱の単一実行ファイルです。
 

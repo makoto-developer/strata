@@ -10,9 +10,10 @@ scripts/.rec/
 # デザイン確認スクリーンショット
 scripts/.shots/
 
-# バイナリビルドの生成物
+# バイナリ・アプリビルドの生成物
 dist/bin/
 dist/.sea/
+dist/app/
 
 # 開発用の作業メモ(公開しない)
 BACKLOG.md

@@ -43,11 +43,19 @@ jobs:
       - name: 単一実行ファイルをビルド
         run: node scripts/build-binary.mjs --tar
 
+      - name: アプリバンドル(Strata.app)と dmg をビルド
+        run: node scripts/build-app.mjs --dmg
+
       - name: 生成物を確認
         run: |
-          ls -lh dist/bin
+          ls -lh dist/bin dist/app
           file dist/bin/strata
           ./dist/bin/strata --version
+          # アプリの実行ファイルがランチャー(スクリプト)であること。
+          # ケースインセンシティブな FS で本体バイナリに上書きされる事故を検出する
+          file dist/app/Strata.app/Contents/MacOS/Strata | grep -q 'shell script'
+          ./dist/app/Strata.app/Contents/MacOS/strata-cli --version
+          codesign --verify --deep --strict dist/app/Strata.app
 
       - uses: actions/upload-artifact@v4
         with:
@@ -55,6 +63,8 @@ jobs:
           path: |
             dist/bin/strata-macos-arm64.tar.gz
             dist/bin/strata-macos-arm64.tar.gz.sha256
+            dist/app/Strata-macos-arm64.dmg
+            dist/app/Strata-macos-arm64.dmg.sha256
 
       - name: Release に添付
         if: startsWith(github.ref, 'refs/tags/v')
@@ -69,8 +79,12 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --notes-file /tmp/notes.md \
+            dist/app/Strata-macos-arm64.dmg \
+            dist/app/Strata-macos-arm64.dmg.sha256 \
             dist/bin/strata-macos-arm64.tar.gz \
             dist/bin/strata-macos-arm64.tar.gz.sha256 \
           || gh release upload "${GITHUB_REF_NAME}" \
+            dist/app/Strata-macos-arm64.dmg \
+            dist/app/Strata-macos-arm64.dmg.sha256 \
             dist/bin/strata-macos-arm64.tar.gz \
             dist/bin/strata-macos-arm64.tar.gz.sha256 --clobber
