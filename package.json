@@ -1,6 +1,6 @@
 {
   "name": "strata-cli",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "多言語(Go / TypeScript / JavaScript / Python / Elixir / Protocol Buffers / GraphQL)・マイクロサービス対応の依存関係可視化・コールグラフ探索・アーキテクチャ検査ツール。gRPC / REST / GraphQL をまたいで関数レベルで処理を追跡し、循環依存とレイヤー違反を CI で検査する",
   "type": "module",
   "bin": {

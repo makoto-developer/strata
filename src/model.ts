@@ -101,7 +101,7 @@ export interface Graph {
 
 /** ツールのバージョン。リリースタグと package.json の version と必ず一致させる
  *  (test/cli.smoke.mjs が 3 者の一致を検査する)。 */
-export const VERSION = '0.1.3';
+export const VERSION = '0.1.4';
 export const TOOL_VERSION = `strata ${VERSION}`;
 
 /**
