@@ -48,7 +48,8 @@ cd strata
 node src/cli.ts serve examples/demo
 ```
 
-macOS(Apple Silicon)なら[単一実行ファイル]({{ site.baseurl }}/getting-started/#macos-apple-silicon-バイナリ)もあります。
+macOS(Apple Silicon)なら[ダブルクリックで使えるアプリ]({{ site.baseurl }}/getting-started/#macos-apple-silicon-アプリ)と
+[単一実行ファイル]({{ site.baseurl }}/getting-started/#macos-apple-silicon-バイナリ)もあります。
 
 ## ドキュメントの歩き方
 
