@@ -197,27 +197,15 @@ Go/Python 等のツールチェーンは**不要**(テキスト・構文レベ�
 
 ### macOS(Apple Silicon)アプリ — 端末を使わない人はこれ
 
-[最新リリース](https://github.com/makoto-developer/strata/releases/latest)から
-**`Strata-macos-arm64.dmg`** を落とし、`Strata.app` を `Applications` へドラッグします。
+```sh
+curl -fsSL https://raw.githubusercontent.com/makoto-developer/strata/main/install.sh | bash
+```
 
-> ### ⚠️ 初回だけ、隔離属性を外す 1 行が必要です
->
-> そのままダブルクリックすると
-> **「"Strata"は壊れているため開けません。ゴミ箱に入れる必要があります。」** と出ます。
-> アプリが壊れているわけではありません(署名の検証自体は通ります)。
-> Apple の**公証(notarization)を受けていない**ためで、ダウンロード時に付く隔離属性があると
-> macOS がこう表示します。ゴミ箱には捨てずに、次を 1 回だけ実行してください。
->
-> ```sh
-> xattr -dr com.apple.quarantine /Applications/Strata.app
-> ```
->
-> 以降はダブルクリックで普通に起動します。
-> **macOS 15 (Sequoia) 以降では「右クリック → 開く」では回避できません**
-> (Apple がその抜け道を廃止したため)。公証は Apple Developer Program(有料)が前提のため、
-> 現状はこの手順が必要です。
+これだけで `/Applications/Strata.app` に入ります。あとは Launchpad や Finder から
+**ダブルクリックするだけ**です。インストーラは dmg を取得してチェックサムを照合し、
+配置したうえで隔離属性を外します([中身はこちら](install.sh))。
 
-そのあとダブルクリックすると:
+ダブルクリックすると:
 
 1. 初回はフォルダ選択が出るので、解析したいリポジトリを選ぶ(2 回目以降は前回のフォルダで起動)
 2. ビューアが既定のブラウザで開く
@@ -229,9 +217,28 @@ Go/Python 等のツールチェーンは**不要**(テキスト・構文レベ�
 アプリの中には CLI も同梱しています。端末からも使いたい場合はこれを PATH に置けます:
 
 ```sh
-ln -s /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
+sudo ln -sf /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
 strata --version
 ```
+
+<details>
+<summary>dmg を手で入れたい場合(インストーラを使わないとき)</summary>
+
+[最新リリース](https://github.com/makoto-developer/strata/releases/latest)の
+`Strata-macos-arm64.dmg` を開き、`Strata.app` を `Applications` へドラッグしたあと、
+**次の 1 行が必要です**。
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Strata.app
+```
+
+これをしないと「"Strata"は壊れているため開けません。ゴミ箱に入れる必要があります。」と出ます。
+アプリが壊れているわけではなく(署名の検証自体は通ります)、Apple の**公証を受けていない**ためです。
+ダウンロード時に付く隔離属性があると macOS がこう表示します。
+**macOS 15 (Sequoia) 以降では「右クリック → 開く」では回避できません**(Apple が廃止したため)。
+上の 1 行インストーラは、この手順まで済ませます。
+
+</details>
 
 ### macOS(Apple Silicon)バイナリ — CLI だけ欲しい人はこれ
 
