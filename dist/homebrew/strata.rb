@@ -22,15 +22,15 @@
 class Strata < Formula
   desc "多言語・マイクロサービス対応の依存関係可視化・コールグラフ探索ツール"
   homepage "https://makoto-developer.github.io/strata/"
-  url "https://github.com/makoto-developer/strata/archive/refs/tags/v0.1.2.tar.gz"
-  version "0.1.2"
-  sha256 "cfabf52ed5d8de2dee11c96897abd78380ee239d0a579c50a92493b9eb9f5c12"
+  url "https://github.com/makoto-developer/strata/archive/refs/tags/v0.1.3.tar.gz"
+  version "0.1.3"
+  sha256 "86f4a5b0808dc3a9c703e5449f15df59600db1eb53d37e5709584d641582c238"
   license "AGPL-3.0-only"
 
   on_macos do
     on_arm do
-      url "https://github.com/makoto-developer/strata/releases/download/v0.1.2/strata-macos-arm64.tar.gz"
-      sha256 "4f335a79e76e3e8b5fd3f2bd8f545f4689b9e2e1dc0c6db07d659c03d6c32ee8"
+      url "https://github.com/makoto-developer/strata/releases/download/v0.1.3/strata-macos-arm64.tar.gz"
+      sha256 "0a4f1f88829d377125b2b946b751f7df3876bc78d8848f65c9aa3a7a182a908b"
     end
 
     on_intel do
