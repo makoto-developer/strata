@@ -511,7 +511,7 @@
   const KIND_ICON = {
     service: '◆', module: '▣', package: '□', dir: '▢',
     file: '·', proto: '⬡', func: 'ƒ', rpc: '⚡', topic: '✉',
-    route: '⇄', gqlfield: '◈',
+    route: '⇄', gqlfield: '◈', artifact: '⬚',
   };
   const ROW = 24;
   const TREE_TOP = 8;
@@ -527,7 +527,7 @@
   const KIND_CHIP = {
     service: 'S', module: 'M', package: 'P', dir: '·',
     file: '·', proto: '⬢', func: 'ƒ', rpc: '⚡', topic: '✉',
-    route: 'H', gqlfield: 'G',
+    route: 'H', gqlfield: 'G', artifact: '⬚',
   };
   if (model.warnings && model.warnings.length) {
     const badge = $('#warnbadge');
@@ -682,11 +682,16 @@
         n.meta && n.meta.interceptors && n.meta.interceptors.length
           ? `<span class="icept" title="gRPC インターセプタ(全 RPC の前段で実行):\n${esc(n.meta.interceptors.join('\n'))}">🛡 ${n.meta.interceptors.length}</span>`
           : '';
+      // 中継「候補」まで。実際の通信経路・層数は静的には決まらないので、そこは主張しない
+      const relay =
+        n.meta && n.meta.relayCandidate
+          ? `<span class="relaychip" title="同じ RPC を実装しつつ自分でも呼んでいます(Gateway / Federation のような素通しの中継である可能性)。\n実際の通信経路や層数は静的解析では決まりません">中継候補</span>`
+          : '';
       parts.push(
         `<div class="${classes.join(' ')}" data-id="${esc(r.id)}" style="padding-left:${r.depth * 16}px" title="${esc(r.id)}">` +
           `<span class="tw" data-tw="1">${tw}</span>` +
           `<span class="ic">${KIND_CHIP[n.kind] || '·'}</span>` +
-          `<span class="lb">${esc(n.label)}</span>${lvlTag}${icept}${loc}` +
+          `<span class="lb">${esc(n.label)}</span>${lvlTag}${relay}${icept}${loc}` +
           `<span class="bmbtn${state.bookmarks.has(r.id) ? ' on' : ''}" data-bm="1" role="button" ` +
           `aria-label="ブックマーク" title="ブックマーク(b キーでも切替。ヘッダの ★ から一覧)">` +
           `${state.bookmarks.has(r.id) ? '★' : '☆'}</span>` +
@@ -1163,6 +1168,10 @@
             arr.map((v) => `<li class="nostyle">${esc(v)}</li>`).join('') +
             '</ul>'
           : '';
+      const relaySum = meta.relayCandidate
+        ? '<div class="sec">中継候補</div><ul><li class="nostyle">同じ RPC を実装しつつ自分でも呼んでいます。' +
+          '実際にどの実装へ到達するかは実行時に決まるため、経路・層数は示していません。</li></ul>'
+        : '';
       const iceptSum = listSec('🛡 インターセプタ(全 RPC の前段)', meta.interceptors);
       const envSum = listSec('⚙ 設定(環境変数)', meta.envVars);
       sideEl.innerHTML =
@@ -1174,6 +1183,7 @@
         `<div class="sec">依存元サービス (${inMap.size})</div>` +
         `<div class="svclist">${sorted(inMap).map(svcItem).join('') || '<div class="sub">なし</div>'}</div>` +
         apiSum +
+        relaySum +
         iceptSum +
         envSum +
         buildPathSection(n);
@@ -1253,9 +1263,13 @@
   const apiSrcEl = $('#apisrc');
   const IS_STATIC = !!window.STRATA_MODEL; // export された HTML では /source が使えない
 
+  // 生成物(artifact)は元 proto が手元に無い API の唯一の定義元なので、proto と同じ棚に並べる。
+  // 元 proto が手元にある生成物は RPC を持たない(定義は proto 側)ので棚には出さない
+  const hasRpcChild = (id) => model.nodes.some((c) => c.parent === id && c.kind === 'rpc');
   const protoNodes = model.nodes
-    .filter((n) => n.kind === 'proto')
+    .filter((n) => n.kind === 'proto' || (n.kind === 'artifact' && hasRpcChild(n.id)))
     .sort((a, b) => a.id.localeCompare(b.id));
+  const artifactCount = protoNodes.filter((n) => n.kind === 'artifact').length;
   const rpcCallers = new Map(); // rpc id -> Set(呼び出し元 func id)
   const rpcImpls = new Map(); // rpc id -> Set(実装 func id)
   for (const e of model.edges) {
@@ -1386,7 +1400,9 @@
         const label = byId.get(id).label;
         if (label.includes('.')) allSvcs.add(label.slice(0, label.indexOf('.')));
       }
-      const dir = p.id.includes('/') ? p.id.slice(0, p.id.lastIndexOf('/')) : '(ルート)';
+      // 生成物はノード id に artifact: 接頭辞が付くので、見出しでは落とす
+      const dirId = p.id.replace(/^artifact:/, '');
+      const dir = dirId.includes('/') ? dirId.slice(0, dirId.lastIndexOf('/')) : '(ルート)';
       if (!groups.has(dir)) groups.set(dir, []);
       groups.get(dir).push({ p, rpcKids });
     }
@@ -1652,18 +1668,51 @@
       (routeNodes.length > 0 ? ` ・ ${routeNodes.length} HTTP` : '') +
       (gqlNodes.length > 0 ? ` ・ ${gqlNodes.length} GraphQL` : '');
     const sum =
-      `${protoNodes.length} proto ・ ${allSvcs.size} service ・ ${rpcTotal} RPC${surfaceSum}${shownNote}` +
+      `${protoNodes.length - artifactCount} proto` +
+      (artifactCount > 0 ? ` ・ ${artifactCount} 生成物` : '') +
+      ` ・ ${allSvcs.size} service ・ ${rpcTotal} RPC${surfaceSum}${shownNote}` +
       ` <span class="mini" data-pfall="collapse">全て畳む</span><span class="mini" data-pfall="expand">全て開く</span>`;
     apiListEl.innerHTML =
       `<div class="apihead">` +
       `<div class="sum">${ftoggle}${sum}</div>` +
       (state.apiFilterCollapsed ? '' : filters) +
       `</div>` +
+      unresolvedSection() +
       (sections.join('') ||
         (filtering
           ? '<div class="sum">フィルタに一致する API がありません</div>'
           : '<div class="sum">API(proto / HTTP ルート / GraphQL スキーマ)が見つかりませんでした。</div>'));
     if (typeof updateApiHeadMin === 'function') updateApiHeadMin();
+  }
+
+  // 解決できなかった参照。推測で線を引かずに残したものを、設定を書く手掛かりとして見せる
+  const UNRESOLVED_LABEL = {
+    artifact: '生成物から逆引き不可',
+    env: '環境変数が未解決',
+    dynamic: '動的生成',
+  };
+
+  function unresolvedSection() {
+    const list = model.unresolved || [];
+    if (list.length === 0) return '';
+    const rows = list
+      .map((u) => {
+        const where = u.file ? `${u.file}${u.line ? ':' + u.line : ''}` : u.from;
+        const jump = u.file ? ' jump' : '';
+        return (
+          `<li class="rpc-item unres-item${jump}" data-unres-file="${esc(u.file || '')}" data-unres-line="${u.line || 1}"` +
+          ` title="${esc(u.hint || '')}">` +
+          `<span class="warnmark badge-unres">${esc(UNRESOLVED_LABEL[u.reason] || u.reason)}</span> ${esc(u.detail)}` +
+          `<span class="cnt">${esc(where)}</span></li>`
+        );
+      })
+      .join('');
+    return (
+      `<div class="protosec unres">` +
+      `<div class="sum">未解決の参照 ${list.length} 件 — 決め手が無いので繋いでいません` +
+      `(strata.config.json の indirection / infra で繋がる可能性があります)</div>` +
+      `<ul class="rpclist">${rows}</ul></div>`
+    );
   }
 
   // フロー図: RPC → 実装サービス → 関数 → … → 別サービスの RPC → … を入れ子で描く
@@ -2433,6 +2482,11 @@
   apiListEl.addEventListener('scroll', updateApiHeadMin);
 
   apiListEl.addEventListener('click', (ev) => {
+    const unres = ev.target.closest('.unres-item.jump');
+    if (unres) {
+      openSourceFile(unres.dataset.unresFile, Number(unres.dataset.unresLine) || 1);
+      return;
+    }
     const ftog = ev.target.closest('[data-ftoggle]');
     if (ftog) {
       // スクロールで自動最小化されている場合は、まず展開(ピン)するだけ

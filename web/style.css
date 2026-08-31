@@ -1174,6 +1174,17 @@ body.tab-diff .searchwrap { display: none !important; }
 #apilist li.rpc-item .warnmark { font-size: 10px; }
 .badge-dead { color: var(--up); }
 .badge-noimpl { color: var(--accent2); }
+.badge-unres { color: var(--accent2); }
+.relaychip {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.protosec.unres .sum { color: var(--muted); }
+.unres-item.jump { cursor: pointer; }
 .badge-test { color: var(--accent); }
 .badge-dep {
   color: var(--muted);

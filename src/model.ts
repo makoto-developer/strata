@@ -3,11 +3,13 @@
 export type NodeKind =
   | 'service' | 'module' | 'dir' | 'package' | 'file' | 'proto' | 'func' | 'rpc' | 'topic'
   | 'route' // HTTP エンドポイント(REST / webhook)
-  | 'gqlfield'; // GraphQL の Query / Mutation / Subscription フィールド
+  | 'gqlfield' // GraphQL の Query / Mutation / Subscription フィールド
+  | 'artifact'; // proto から生成されたクライアントライブラリ(中継点であって呼び出し先ではない)
 export type EdgeKind =
   | 'import' | 'call' | 'rpc' | 'impl' | 'proto' | 'event'
   | 'http' // HTTP 呼び出し(クライアント → ルート)
-  | 'graphql'; // GraphQL 操作(クライアント → フィールド)、federation の参照
+  | 'graphql' // GraphQL 操作(クライアント → フィールド)、federation の参照
+  | 'generates'; // proto の service → そこから生成された artifact
 
 /**
  * ノードの付随情報。アナライザが書き込み、ビューア/レポート/CLI が読む。
@@ -46,6 +48,12 @@ export interface NodeMeta {
   gqlType?: string; // 戻り値の型
   entities?: Record<string, string>; // federation のエンティティ型 → @key(fields)
   subgraph?: string; // サブグラフ名(スキーマを持つサービス/モジュール)
+  // 間接層(生成クライアント / Gateway / Federation)
+  artifactVersion?: string; // 生成物のバージョン(git tag 等。分かる場合のみ)
+  resolvedBy?: string; // この artifact を解決した indirection パターン名
+  // 中継「候補」。同じ RPC を実装しつつ自分でも呼ぶ層。実際の通信経路は静的には決まらないので、
+  // 層数・順序・到達先を主張してはいけない(表示のフィルタにだけ使う)
+  relayCandidate?: boolean;
 }
 
 export interface GNode {
@@ -65,6 +73,25 @@ export interface GEdge {
   kind: EdgeKind;
   /** 呼び出し箇所(最大5件)。ビューアの「呼び出し元行へジャンプ」に使う */
   sites?: Array<{ f: string; l: number }>;
+  /** この呼び出しが経由した生成物(artifact)の node id。呼び出し元が実際に import している事実だけを持つ */
+  via?: string[];
+}
+
+/** 未解決参照の理由。UI とドキュメントの表示文言はこのキーで引く。 */
+export type UnresolvedReason = 'artifact' | 'env' | 'dynamic';
+
+/**
+ * 「何らかの RPC / トピックを叩いているが、対応する定義をまだ特定できていない」中間状態。
+ * 推測で繋がずここに残し、ユーザーが indirection / infra 設定を書く手がかりにする
+ * (「誤検出より取りこぼしを優先」方針)。
+ */
+export interface UnresolvedRef {
+  reason: UnresolvedReason;
+  from: string; // 呼び出し元ノード id
+  detail: string; // import パス / 環境変数名 / 動的に組み立てられた式
+  file?: string;
+  line?: number;
+  hint?: string; // 解決するために何を設定すればよいか
 }
 
 /**
@@ -97,7 +124,12 @@ export interface Graph {
   rules?: ForbiddenRule[]; // strata.config.json の forbidden(あれば埋め込む)
   thresholds?: Thresholds; // strata.config.json の thresholds(あれば埋め込む)
   ref?: string; // --ref で解析したときの git ref(作業ツリーを見たときは未設定)
+  unresolved?: UnresolvedRef[]; // 解決できなかった参照(indirection / infra が有効なときのみ)
+  schemaVersion?: number; // モデルスキーマ版。未設定は 1 とみなす(古い model.json の後方互換)
 }
+
+/** 現在のモデルスキーマ版。フィールドを追加・改名したら上げる。 */
+export const SCHEMA_VERSION = 2;
 
 /** ツールのバージョン。リリースタグと package.json の version と必ず一致させる
  *  (test/cli.smoke.mjs が 3 者の一致を検査する)。 */
@@ -135,6 +167,9 @@ export function parseGraph(text: string, source: string): Graph {
     nodes: g.nodes as GNode[],
     edges: g.edges as GEdge[],
     warnings: Array.isArray(g.warnings) ? (g.warnings as string[]) : [],
+    // schemaVersion 無し = v1(未解決参照を持たない世代)。読めなくはならないので拒否しない
+    schemaVersion: typeof g.schemaVersion === 'number' ? g.schemaVersion : 1,
+    ...(Array.isArray(g.unresolved) ? { unresolved: g.unresolved as UnresolvedRef[] } : {}),
     ...(Array.isArray(g.rules) ? { rules: g.rules as ForbiddenRule[] } : {}),
     ...(g.thresholds && typeof g.thresholds === 'object' ? { thresholds: g.thresholds as Thresholds } : {}),
   };
@@ -185,8 +220,9 @@ export class Builder {
     return parent;
   }
 
-  addEdge(from: string, to: string, kind: EdgeKind, count = 1, site?: { f: string; l: number }): void {
-    if (from === to || !from || !to) return;
+  // 呼び出し側がキー形式(区切りは NUL)を組み立て直さずに済むよう、作った/更新したエッジを返す
+  addEdge(from: string, to: string, kind: EdgeKind, count = 1, site?: { f: string; l: number }): GEdge | undefined {
+    if (from === to || !from || !to) return undefined;
     const key = from + ' ' + to + ' ' + kind;
     let edge = this.edges.get(key);
     if (edge) {
@@ -201,6 +237,7 @@ export class Builder {
         edge.sites.push(site);
       }
     }
+    return edge;
   }
 
   warn(message: string): void {
@@ -216,6 +253,7 @@ export class Builder {
     });
     return {
       tool: TOOL_VERSION,
+      schemaVersion: SCHEMA_VERSION,
       name,
       root,
       createdAt: new Date().toISOString(),
