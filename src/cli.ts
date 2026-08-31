@@ -29,6 +29,7 @@ const HELP = `Strata — 多言語・マイクロサービス対応の依存関�
                 [--sarif] [-o file.sarif]  SARIF 2.1.0 で出力(GitHub Code Scanning 連携)
   strata report [dir|model.json] [-o report.md] アーキテクチャレポート(mermaid + Markdown)を出力
   strata metrics [dir|model.json] [--json]  サービス結合度(Ca/Ce/不安定度)を算出
+  strata unresolved [dir|model.json] [--json] 解決できなかった参照を一覧(間接層の設定を書く手掛かり)
   strata diff   <old> <new> [--json]        2 モデルを比較(依存増減・新規/解消の循環)
                 [dir] --ref <base>..<head>  2 つの git ref を直接比較(head 省略で作業ツリー)
   strata trace  [dir|model.json] <関数名/ID> [--up] [--depth N] コールツリーを表示
@@ -107,6 +108,43 @@ function printCycles(model: Graph, asJson: boolean): number {
     console.log(`  [${where}] ${members} (${c.edgeCount} edges)`);
   }
   return 1;
+}
+
+// 未解決の理由 → 利用者向けの説明。model.ts の UnresolvedReason と 1 対 1 で対応させる
+const UNRESOLVED_LABEL: Record<string, string> = {
+  artifact: '生成物から proto 定義を逆引きできなかった',
+  env: '環境変数の値が IaC から解決できなかった',
+  dynamic: 'トピック名が動的生成されている',
+};
+
+/** 未解決参照の一覧。設定を書けば繋がるものを利用者が見つけられるようにする。 */
+function printUnresolved(model: Graph, asJson: boolean): void {
+  const list = model.unresolved ?? [];
+  if (asJson) {
+    console.log(JSON.stringify({ unresolved: list }, null, 2));
+    return;
+  }
+  if (list.length === 0) {
+    console.log('✓ 未解決の参照はありません');
+    return;
+  }
+  console.log(`未解決の参照: ${list.length} 件\n`);
+  const byReason = new Map<string, typeof list>();
+  for (const u of list) {
+    const bucket = byReason.get(u.reason) ?? [];
+    bucket.push(u);
+    byReason.set(u.reason, bucket);
+  }
+  for (const [reason, items] of byReason) {
+    console.log(`[${UNRESOLVED_LABEL[reason] ?? reason}] ${items.length} 件`);
+    for (const u of items) {
+      const where = u.file ? `${u.file}${u.line ? ':' + u.line : ''}` : u.from;
+      console.log(`  ${u.detail}  (${where})`);
+      if (u.hint) console.log(`    → ${u.hint}`);
+    }
+    console.log('');
+  }
+  console.log('繋げたいものが残っている場合は strata.config.json の indirection / infra を設定してください。');
 }
 
 function printViolations(model: Graph, violations: RuleViolation[]): void {
@@ -425,6 +463,11 @@ function main(): void {
       }
       console.log('\nI が高い(不安定)ほど多くに依存し変更の影響を受けやすい。');
       console.log('I が低い(安定)ほど多くに依存され、変更時の影響範囲が広い。');
+      break;
+    }
+    case 'unresolved': {
+      const model = loadModel(args.positional[0], refOf(args));
+      printUnresolved(model, args.options.has('json'));
       break;
     }
     case 'report': {

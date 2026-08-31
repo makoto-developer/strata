@@ -1,0 +1,5 @@
+{
+  "name": "renamed-relay",
+  "services": [{ "name": "gateway", "path": "gateway" }, { "name": "user", "path": "user" }],
+  "indirection": { "enabled": true }
+}

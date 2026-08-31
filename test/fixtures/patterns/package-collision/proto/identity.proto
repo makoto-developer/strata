@@ -1,0 +1,10 @@
+syntax = "proto3";
+package acme.identity.v1;
+option go_package = "example.com/acme/proto/identity;identitypb";
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+}
+
+message GetUserRequest { string id = 1; }
+message GetUserResponse { string id = 1; }

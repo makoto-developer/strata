@@ -18,8 +18,11 @@ import { registerPy, linkPy } from './analyzers/python.ts';
 import { linkTests } from './analyzers/tests.ts';
 import { detectConfigSurface } from './analyzers/config.ts';
 import { detectMessaging } from './analyzers/messaging.ts';
+import { resolveInfraTopics } from './analyzers/infra.ts';
 import { detectHttp } from './analyzers/http.ts';
 import { detectGraphql } from './analyzers/graphql.ts';
+import { collectRpcCallEvidence } from './rpc-call-evidence.ts';
+import { resolveIndirection } from './indirection.ts';
 
 /**
  * 言語アナライザの登録(register)→接続(link)の 2 相を表す。
@@ -307,6 +310,9 @@ export function scan(rootDir: string): Graph {
     jsExports: new Map(),
     jsProtoRefsOfProject: new Map(),
     jsProtoRefsOfFile: new Map(),
+    rpcCalls: [],
+    pendingTopics: [],
+    unresolved: [],
   };
 
   // 登録フェーズ(ノードと索引を作る)→ 接続フェーズ(索引を使ってエッジを張る)。
@@ -324,8 +330,13 @@ export function scan(rootDir: string): Graph {
   detectMessaging(ctx); // Pub/Sub のトピック経由の依存(config.messaging がある時のみ)
   detectHttp(ctx); // HTTP(REST / webhook)のルートと呼び出し。関数ノードが揃った後に実行する
   detectGraphql(ctx); // GraphQL スキーマ・リゾルバ・操作・federation
+  // フェーズ A(収集)→ フェーズ B(解決)。間接層を越えた呼び出しは全ノードが揃ってから繋ぐ
+  collectRpcCallEvidence(ctx);
+  resolveIndirection(ctx);
+  resolveInfraTopics(ctx); // 環境変数経由のトピック名を IaC から逆引きする
 
   const graph = builder.build(wsName, rootAbs);
+  if (ctx.unresolved.length > 0) graph.unresolved = ctx.unresolved;
   if (ctx.config.forbidden && ctx.config.forbidden.length > 0) graph.rules = ctx.config.forbidden;
   if (ctx.config.thresholds) graph.thresholds = ctx.config.thresholds;
   return graph;

@@ -1,0 +1,14 @@
+syntax = "proto3";
+package acme.ops.v1;
+option go_package = "example.com/acme/proto/ops;opspb";
+
+service UserService {
+  rpc Lookup(LookupRequest) returns (LookupResponse);
+}
+
+service AdminService {
+  rpc Lookup(LookupRequest) returns (LookupResponse);
+}
+
+message LookupRequest { string id = 1; }
+message LookupResponse { string id = 1; }

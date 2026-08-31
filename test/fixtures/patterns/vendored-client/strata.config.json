@@ -1,0 +1,5 @@
+{
+  "name": "vendored-client",
+  "services": [{ "name": "storefront", "path": "app" }],
+  "indirection": { "enabled": true }
+}

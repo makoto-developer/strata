@@ -1,0 +1,10 @@
+{
+  "name": "indirection-demo",
+  "services": [
+    { "name": "user", "path": "services/user" },
+    { "name": "order", "path": "services/order" },
+    { "name": "gateway", "path": "gateway" },
+    { "name": "federation", "path": "federation" }
+  ],
+  "indirection": { "enabled": true }
+}

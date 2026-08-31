@@ -1,0 +1,11 @@
+syntax = "proto3";
+package acme.feed.v1;
+option go_package = "example.com/acme/proto/feed;feedpb";
+
+service FeedService {
+  rpc Watch(WatchRequest) returns (stream Event);
+  rpc Sync(stream Event) returns (stream Event);
+}
+
+message WatchRequest { string id = 1; }
+message Event { string body = 1; }

@@ -1,0 +1,1 @@
+{ "name": "wrapped-client", "services": [{ "name": "app", "path": "app" }], "indirection": { "enabled": true } }

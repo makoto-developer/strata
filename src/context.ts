@@ -5,7 +5,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Builder, ForbiddenRule, Thresholds } from './model.ts';
+import type { Builder, ForbiddenRule, Thresholds, UnresolvedRef } from './model.ts';
 
 export interface ServiceConf {
   name: string;
@@ -30,6 +30,77 @@ export interface Config {
   };
   // GraphQL 検出。既定は有効
   graphql?: { enabled?: boolean };
+  // 間接層(生成クライアントライブラリ / Gateway / Federation 経由の呼び出し)の解決。既定は無効
+  indirection?: IndirectionConf;
+  // IaC(k8s / Helm / Terraform)から環境変数の値を逆引きする。既定は無効
+  infra?: InfraConf;
+}
+
+/** 生成物 → 元 proto の逆引き方法。どれも失敗しうるので、失敗時は例外ではなく未解決として次へ進む。 */
+export type ResolveVia = 'packageComment' | 'namingConvention' | 'manifest';
+
+/**
+ * 自動検出で解決できなかったときの逃げ道。
+ * 生成物の置き場所・命名がツール側の想定から外れているリポジトリだけが必要とする。
+ */
+export interface IndirectionPattern {
+  name: string;
+  importPathPattern: string; // グロブ(例 "**/gen/proto/**")
+  resolveVia: ResolveVia;
+  namingConvention?: { importPathToService: string }; // {package} / {service} / {version} を含むテンプレート
+  manifest?: { path: string }; // 生成物 → proto の対応表(ws 相対の JSON)
+  comment?: string;
+}
+
+export interface IndirectionConf {
+  enabled?: boolean;
+  // 未指定でも動く(生成スタブの署名とシンボル一致で自動解決する)。
+  // patterns は自動検出が外れた構成のための追加ヒント
+  patterns?: IndirectionPattern[];
+  // 生成物として追加で読むファイル(グロブ)。ジェネレータが独自のファイル名を出す構成や、
+  // 生成クライアントが依存パッケージ(node_modules 等)にしか無い構成で使う
+  artifactPaths?: string[];
+}
+
+export interface InfraSource {
+  type: 'kubernetes' | 'helm' | 'terraform';
+  path: string; // グロブ(例 "k8s/**/*.yaml")
+}
+
+export interface InfraConf {
+  enabled?: boolean;
+  sources?: InfraSource[];
+}
+
+/**
+ * フェーズ A(収集)が出す「まだ接続していない呼び出しの証拠」。
+ * import パスではなくシンボル(service 名 + メソッド名)を証拠にするので、
+ * proto と呼び出し元の間に何段の中間層があっても、構成を知らずに収集できる。
+ */
+export interface RpcCallEvidence {
+  from: string; // 呼び出し元ノード id(Go パッケージ / JS ファイル / モジュール)
+  funcId?: string; // 分かる場合の呼び出し元関数ノード id
+  service: string; // 例 "UserService"
+  method: string; // 例 "GetUser"
+  importPaths?: string[]; // 呼び出し元ファイルの import 一覧(候補の絞り込みにだけ使う補助情報)
+  // 生成クライアントのコンストラクタ(New<X>Client / <X>Stub / createClient)で掴んだか。
+  // 型注釈だけの束縛は手書き interface やモックと区別できないので、短名での接続には使わない
+  fromConstructor: boolean;
+  // 型注釈の修飾子(`orderv1.OrderServiceClient` の `orderv1`)が指す import パス。
+  // これが proto に解決できるなら、型注釈だけでも「その proto のクライアント」という強い証拠になる
+  qualifierPath?: string;
+  file: string; // ws 相対
+  line: number;
+}
+
+/** トピック名が静的に確定しない publish / subscribe(環境変数経由 or 実行時組み立て)。 */
+export interface PendingTopic {
+  from: string; // 発行 / 購読しているサービスノード id
+  role: 'publish' | 'subscribe';
+  envVar?: string; // os.Getenv("X") 経由のとき
+  expr?: string; // 実行時に組み立てているとき(静的には解決不能。表示用)
+  file: string;
+  line: number;
 }
 
 export interface Project {
@@ -85,6 +156,17 @@ export interface Ctx {
   jsExports: Map<string, Map<string, string>>; // file id -> (エクスポート名 -> func node id)
   jsProtoRefsOfProject: Map<string, Set<string>>; // project node id -> 参照 proto node ids
   jsProtoRefsOfFile: Map<string, Set<string>>; // file id -> 参照 proto node ids
+  // 間接層。フェーズ A で集め、フェーズ B(src/indirection.ts)で解決する
+  rpcCalls: RpcCallEvidence[];
+  pendingTopics: PendingTopic[];
+  unresolved: UnresolvedRef[];
+}
+
+/** 未解決参照を重複なく積む(同じ reason × from × detail は 1 件にまとめる)。 */
+export function addUnresolved(ctx: Ctx, ref: UnresolvedRef): void {
+  const key = ref.reason + ' ' + ref.from + ' ' + ref.detail;
+  if (ctx.unresolved.some((u) => u.reason + ' ' + u.from + ' ' + u.detail === key)) return;
+  ctx.unresolved.push(ref);
 }
 
 export const SKIP_DIRS = new Set([
