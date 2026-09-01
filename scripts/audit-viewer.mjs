@@ -54,6 +54,54 @@ const text = (sel) => page.textContent(sel).catch(() => '');
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1800);
 
+// 起動オーバーレイ: 消し忘れると画面全体を覆って何も操作できなくなる
+{
+  const boot = await page.evaluate(() => {
+    const el = document.querySelector('#boot');
+    if (!el) return { gone: true };
+    const r = el.getBoundingClientRect();
+    return { gone: false, w: Math.round(r.width), h: Math.round(r.height) };
+  });
+  record('起動オーバーレイが消えている', boot.gone, boot.gone ? '' : `残っている ${boot.w}x${boot.h}`);
+}
+
+// 待たせる画面のローディング表示(/source を遅らせて確かめる)
+{
+  await page.route('**/source*', async (route) => {
+    await new Promise((r) => setTimeout(r, 1200));
+    await route.continue();
+  });
+  await page.click('#tab-api');
+  await page.waitForTimeout(800);
+  const shown = await page.evaluate(() => {
+    const it = document.querySelector('#apilist .rpc-item');
+    if (it) it.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return !!it;
+  });
+  await page.waitForTimeout(700);
+  await page.evaluate(() => {
+    const fn = document.querySelector('#apiflow [data-id]');
+    if (fn) fn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await page.waitForTimeout(300);
+  const loading = await page.evaluate(() => {
+    const box = document.querySelector('#apisrc .loadbox');
+    if (!box) return { box: false };
+    const spin = box.querySelector('.spin');
+    const r = spin ? spin.getBoundingClientRect() : { width: 0 };
+    return { box: true, text: box.textContent.trim(), spin: Math.round(r.width) };
+  });
+  await page.waitForTimeout(1500);
+  const done = await page.evaluate(() => ({
+    box: !!document.querySelector('#apisrc .loadbox'),
+    code: !!document.querySelector('#apisrc pre.code'),
+  }));
+  await page.unroute('**/source*');
+  record('ソース読み込み中にローディングが出る', shown && loading.box && loading.spin > 0,
+    loading.box ? `${loading.text}(spinner ${loading.spin}px)` : 'ローディングが出ない');
+  record('読み込み後はローディングが消えてコードが出る', !done.box && done.code, JSON.stringify(done));
+}
+
 // ---------- タブ ----------
 const tabs = [
   ['構造', '#tab-structure', '#main'],
@@ -178,6 +226,42 @@ for (const [label, sel] of [['説明書リンク', '#docslink'], ['ソースリ�
 await page.click('#tab-api');
 await page.waitForTimeout(800);
 const apiItems = await page.$$eval('#apilist [data-rpc], #apilist .apirow, #apilist li', (e) => e.length).catch(() => 0);
+// 取り込んだ proto カタログのうち、使っていない定義を隠すトグル
+{
+  await page.evaluate(() => { if (!document.querySelector('.filters')) document.querySelector('.ftoggle').click(); });
+  await page.waitForTimeout(300);
+  const n = () => page.evaluate(() => document.querySelectorAll('#apilist .rpc-item').length);
+  const chip = await page.$('[data-chip-excl="used"]');
+  if (!chip) {
+    record('API: 「コードに出てくるものだけ」', false, 'チップが無い');
+  } else {
+    const before = await n();
+    await page.click('[data-chip-excl="used"]');
+    await page.waitForTimeout(400);
+    const off = await n();
+    await page.click('[data-chip-excl="used"]');
+    await page.waitForTimeout(400);
+    const back = await n();
+      record('API: 「コードに出てくるものだけ」で絞れて戻せる', off > before && back === before, `${before} → ${off} → ${back}`);
+  }
+  {
+    // mock 除外チップ(このデモにモックは無いので、押せて例外が出ないことを見る)
+    const before = errors.length;
+    const toggled = await page.evaluate(() => {
+      const pick = () => document.querySelector('[data-chip-excl="mocks"]');
+      if (!pick()) return null;
+      // クリックで再描画されるので、状態は毎回引き直したノードから読む
+      pick().click();
+      const on = pick().classList.contains('on');
+      pick().click();
+      return { on, off: !pick().classList.contains('on') };
+    });
+    await page.waitForTimeout(400);
+    record('API: 「mock を除外」チップが動く', !!toggled && toggled.on && toggled.off && errors.length === before,
+      toggled ? JSON.stringify(toggled) : 'チップが無い');
+  }
+}
+
 record('API: カタログ描画', apiItems > 0, `${apiItems} 件`);
 const firstApi = await page.$('#apilist [data-rpc]');
 if (firstApi) {
@@ -194,6 +278,139 @@ await page.click('#tab-diagram');
 await page.waitForTimeout(900);
 const svgBoxes = await page.$$eval('#diagramview svg *', (e) => e.length).catch(() => 0);
 record('図: SVG 描画', svgBoxes > 0, `${svgBoxes} 要素`);
+
+// 図は viewBox で表示範囲を決める。折り返し・ラベルの重なり・拡大縮小は
+// ソースを読んでも分からないので、実ブラウザで測る
+{
+  const geom = await page.evaluate(() => {
+    const svg = document.querySelector('#dg-svg');
+    if (!svg) return null;
+    const vb = svg.getAttribute('viewBox').split(' ').map(Number);
+    const boxes = [...svg.querySelectorAll('.dg-node rect')].map((r) => ({
+      x: +r.getAttribute('x'), y: +r.getAttribute('y'), w: +r.getAttribute('width'), h: +r.getAttribute('height'),
+    }));
+    // 見出しだけでなく副題(⚡RPC ・ loc ・ ⇠N 依存元)も箱に収まっているか見る
+    let clipped = 0;
+    for (const g of svg.querySelectorAll('.dg-node')) {
+      const rect = g.querySelector('rect');
+      if (!rect) continue;
+      const w = +rect.getAttribute('width');
+      for (const t of g.querySelectorAll('.dg-label, .dg-sub')) {
+        if (t.textContent && t.getComputedTextLength() > w - 8) clipped++;
+      }
+    }
+    const ls = [...svg.querySelectorAll('.dg-elabel:not(.hidden)')].map((t) => t.getBBox());
+    let overlap = 0;
+    for (let i = 0; i < ls.length; i++) {
+      for (let j = i + 1; j < ls.length; j++) {
+        const a = ls[i];
+        const b = ls[j];
+        if (a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height) overlap++;
+      }
+    }
+    const r = svg.getBoundingClientRect();
+    return {
+      vb, overlap, clipped,
+      right: Math.max(...boxes.map((b) => b.x + b.w)), bottom: Math.max(...boxes.map((b) => b.y + b.h)),
+      scale: Math.min(r.width / vb[2], r.height / vb[3]),
+      bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  record('図: 箱が SVG に収まる', geom && geom.right <= geom.vb[2] && geom.bottom <= geom.vb[3],
+    geom ? `右 ${Math.round(geom.right)}/${geom.vb[2]} 下 ${Math.round(geom.bottom)}/${geom.vb[3]}` : 'SVG なし');
+  record('図: 横スクロールが出ない', geom && geom.bodyOverflow <= 1, geom ? `はみ出し ${geom.bodyOverflow}px` : '');
+  record('図: ラベルの文字切れなし', geom && geom.clipped === 0, geom ? `${geom.clipped} 件` : '');
+  record('図: 境界ラベルが重ならない', geom && geom.overlap === 0, geom ? `${geom.overlap} 組` : '');
+  record('図: 初期表示で拡大しない', geom && geom.scale <= 1.02, geom ? `倍率 ${geom.scale.toFixed(2)}` : '');
+
+  const ui = await page.evaluate(() => {
+    const svg = document.querySelector('#dg-svg');
+    const boxes = [...svg.querySelectorAll('.dg-node > rect:first-of-type')].map((r) => ({
+      x: +r.getAttribute('x'), y: +r.getAttribute('y'), w: +r.getAttribute('width'), h: +r.getAttribute('height'),
+    }));
+    const bandHit = [...svg.querySelectorAll('.dg-lvl')].filter((t) => {
+      const b = t.getBBox();
+      return boxes.some((x) => b.x < x.x + x.w && x.x < b.x + b.width && b.y < x.y + x.h && x.y < b.y + b.height);
+    }).map((t) => t.textContent);
+    const bands = [...svg.querySelectorAll('.dg-lvl')].map((t) => t.textContent);
+    const langBars = [...svg.querySelectorAll('.dg-node .dg-langbar')].filter((r) => {
+      const f = getComputedStyle(r).fill;
+      return f && f !== 'none' && f !== 'rgba(0, 0, 0, 0)';
+    }).length;
+    const before = svg.querySelectorAll('.dg-node').length;
+    const input = document.querySelector('#dg-q');
+    const label = svg.querySelector('.dg-node .dg-label').textContent;
+    input.value = label.slice(0, Math.max(3, label.length - 1));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const dim = svg.querySelectorAll('.dg-node.dim').length;
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#dg-api').click();
+    const apiOnly = document.querySelectorAll('#dg-svg .dg-node').length;
+    document.querySelector('#dg-api').click();
+    return { bands, bandHit, langBars, before, dim, apiOnly, restored: document.querySelectorAll('#dg-svg .dg-node').length,
+      hasQ: !!document.querySelector('#dg-q'), hasHop: !!document.querySelector('#dg-hop') };
+  });
+  record('図: 帯が「依存の深さ」', ui.bands.every((t) => t === '独立' || /^依存の深さ \d+$/.test(t)), ui.bands.join(' / '));
+  record('図: 帯のラベルが箱と重ならない', ui.bandHit.length === 0, ui.bandHit.join(' / '));
+  record('図: 言語の色帯が塗られる', ui.langBars > 0, `${ui.langBars} 個`);
+  record('図: 絞り込み UI がある', ui.hasQ && ui.hasHop, '');
+  record('図: 検索で一致しない箱が減光', ui.dim > 0 && ui.dim < ui.before, `${ui.dim}/${ui.before}`);
+  record('図: 「API のみ」で絞れて戻せる', ui.apiOnly <= ui.before && ui.restored === ui.before,
+    `${ui.before} → ${ui.apiOnly} → ${ui.restored}`);
+
+  const zoom = await page.evaluate(() => {
+    const svg = document.querySelector('#dg-svg');
+    const vw = () => Number(svg.getAttribute('viewBox').split(' ')[2]);
+    const fit = vw();
+    document.querySelector('#dg-in').click();
+    const zin = vw();
+    document.querySelector('#dg-fit').click();
+    const back = vw();
+    svg.focus();
+    svg.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true, cancelable: true }));
+    const bykey = vw();
+    svg.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true, cancelable: true }));
+    return { fit, zin, back, bykey, reset: vw(), focusable: svg.getAttribute('tabindex') === '0' };
+  });
+  // 右パネルで API を選ぶと、呼び出し元が図で分かるか
+  const pick = await page.evaluate(() => {
+    const svg = () => document.querySelector('#dg-svg');
+    const g = [...svg().querySelectorAll('.dg-node')].find(
+      (n) => (n.querySelector('.dg-sub') || {}).textContent && (n.querySelector('.dg-sub') || {}).textContent.includes('RPC'),
+    );
+    if (!g) return { skip: true };
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const item = document.querySelector('#side .apipick-item');
+    if (!item) return { noList: true };
+    item.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const s = svg();
+    const out = {
+      callers: s.querySelectorAll('.dg-node.apicaller').length,
+      target: s.querySelectorAll('.dg-node.apiimpl, .dg-node.apidef').length,
+      dimmed: s.querySelectorAll('.dg-node.apidim').length,
+      hit: s.querySelectorAll('.dg-edge.apihit').length,
+      chip: !!document.querySelector('#dg-apiclear'),
+    };
+    document.querySelector('#dg-apiclear').click();
+    out.clearedDim = document.querySelectorAll('#dg-svg .dg-node.apidim').length;
+    out.clearedChip = !!document.querySelector('#dg-apiclear');
+    return out;
+  });
+  if (pick.skip || pick.noList) {
+    record('図: API を選ぶと呼び出し元が分かる', false, pick.skip ? 'RPC を持つ箱がない' : '右パネルに API 一覧がない');
+  } else {
+    record('図: API を選ぶと呼び出し元が分かる', pick.callers > 0 && pick.target > 0 && pick.dimmed > 0 && pick.hit > 0,
+      `呼び出し元 ${pick.callers} / 対象 ${pick.target} / 減光 ${pick.dimmed} / 線 ${pick.hit}`);
+    record('図: API の強調を解除できる', pick.chip && pick.clearedDim === 0 && !pick.clearedChip,
+      `解除後 減光 ${pick.clearedDim} チップ ${pick.clearedChip}`);
+  }
+
+  record('図: ＋ボタンで拡大', zoom.zin < zoom.fit, `${zoom.fit} → ${zoom.zin}`);
+  record('図: 全体を表示で戻る', zoom.back === zoom.fit, `${zoom.zin} → ${zoom.back}`);
+  record('図: キーボードで拡大縮小', zoom.focusable && zoom.bykey < zoom.fit && zoom.reset === zoom.fit,
+    `focusable=${zoom.focusable} + → ${zoom.bykey} / 0 → ${zoom.reset}`);
+}
 
 // ---------- エントリーポイント ----------
 await page.click('#tab-entries');

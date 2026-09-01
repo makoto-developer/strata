@@ -1,0 +1,10 @@
+syntax = "proto3";
+package team_b.v1;
+option go_package = "example.com/teams/b/proto;breportpb";
+
+service ReportService {
+  rpc Export(ExportRequest) returns (ExportResponse);
+}
+
+message ExportRequest { string id = 1; }
+message ExportResponse { bytes body = 1; }

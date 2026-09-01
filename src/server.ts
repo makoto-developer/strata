@@ -297,7 +297,15 @@ export function serve(
   // 読み取りを許可する「実パスの root 集合」。通常プロジェクトは root 自身の実パス。
   // 複合プロジェクトはワークスペースがシンボリックリンク束なので、登録された各 paths[] の
   // 実パスも許可する(実ファイルは各リポジトリ配下に解決される)。
+  // 許可 root の算出はディレクトリ走査を伴うので短時間キャッシュする。
+  // シンボリックリンクの増減は数秒で追随すればよい(解析側は --watch が拾う)
+  const ALLOWED_ROOTS_TTL_MS = 5000;
+  const allowedRootsCache = new Map<string, { at: number; roots: string[] }>();
+
   const allowedRealRootsFor = (p: string | null, root: string): string[] => {
+    const cacheKey = `${p ?? ''}\u0000${root}`;
+    const cached = allowedRootsCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < ALLOWED_ROOTS_TTL_MS) return cached.roots;
     const roots = new Set<string>();
     const push = (d: string): void => {
       try {
@@ -312,7 +320,40 @@ export function serve(
       if (entry?.composite && Array.isArray(entry.paths)) for (const d of entry.paths) push(d);
     }
     push(root);
-    return [...roots];
+    // 複合プロジェクトとして登録せず、シンボリックリンクを並べたディレクトリを直接 serve する
+    // 使い方も scan は解析できる。許可 root を増やさないと、解析できたファイルが 403 で読めない。
+    // 深い階層のリンクは従来どおり辿らない(リンクを置けるのはワークスペース直下だけ)
+    let rootReal: string;
+    try {
+      rootReal = fs.realpathSync(root);
+    } catch {
+      const bail = [...roots];
+      allowedRootsCache.set(cacheKey, { at: Date.now(), roots: bail });
+      return bail;
+    }
+    try {
+      for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isSymbolicLink()) continue;
+        const child = path.join(root, entry.name);
+        try {
+          if (!fs.statSync(child).isDirectory()) continue;
+          const target = fs.realpathSync(child);
+          // リンク先がファイルシステムのルートやワークスペースの祖先(ホーム等)だと、
+          // 「リポジトリを 1 つ足す」ではなく広大な読み取り権限になる。そこは許可しない。
+          // 悪意あるリポジトリを clone してそのまま serve した場合の被害を抑える
+          if (target === path.parse(target).root) continue;
+          if (rootReal === target || rootReal.startsWith(target + path.sep)) continue;
+          roots.add(target);
+        } catch {
+          /* リンク切れ・読めないリンクは無視 */
+        }
+      }
+    } catch {
+      /* ルートが読めなければ従来どおり root だけ */
+    }
+    const out = [...roots];
+    allowedRootsCache.set(cacheKey, { at: Date.now(), roots: out });
+    return out;
   };
 
   // resolved(root 相対から path.resolve したパス)をシンボリックリンク解決後の実パスで

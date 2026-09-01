@@ -1,0 +1,10 @@
+syntax = "proto3";
+package retail.catalog.v1;
+option go_package = "example.com/retail/proto/catalog/v1;catalogv1";
+
+service CatalogService {
+  rpc GetItem(GetItemRequest) returns (GetItemResponse);
+}
+
+message GetItemRequest { string sku = 1; }
+message GetItemResponse { string sku = 1; string title = 2; }

@@ -11,7 +11,7 @@ import { exportHtml } from '../src/export.ts';
 import { parseBlamePorcelain, detectPrNumber } from '../src/server.ts';
 import { leadingComment, stripSource } from '../src/lex.ts';
 import { parseGraph } from '../src/model.ts';
-import { checkRules } from '../src/rules.ts';
+import { checkRules, markViolations } from '../src/rules.ts';
 import { buildSarif } from '../src/sarif.ts';
 import { scanAtRef, splitRefRange } from '../src/gitref.ts';
 import { computeServiceMetrics } from '../src/metrics.ts';
@@ -271,6 +271,28 @@ try {
   else fail('逆方向を誤検出した');
   if (checkRules(g, []).length === 0 && checkRules(g, undefined).length === 0) ok('rules: ルールなしなら違反ゼロ');
   else fail('ルールなしで違反が出た');
+
+  // 図の色付けは、ビューアで照合し直さずエッジに付いた印を読む(CLI と食い違わせない)
+  const marked = { ...g, edges: g.edges.map((e) => ({ ...e })) };
+  const n = markViolations(marked, rules);
+  if (n === 1 && marked.edges[0].violates === 'domain-no-infra') ok('rules: 違反したエッジに印が付く(図の色付け用)');
+  else fail('violates の印が想定外: ' + JSON.stringify(marked.edges));
+  const clean = { ...g, edges: g.edges.map((e) => ({ ...e })) };
+  if (markViolations(clean, []) === 0 && clean.edges[0].violates === undefined) ok('rules: ルールなしでは印を付けない');
+  else fail('ルールなしで印が付いた');
+
+  // 同じ端点に種類の違うエッジがあるとき、重複判定で片方を落とさない
+  const g3 = {
+    ...g,
+    edges: [
+      { from: 'app/domain', to: 'app/infra', count: 1, kind: 'import' },
+      { from: 'app/domain', to: 'app/infra', count: 1, kind: 'call' },
+    ],
+  };
+  const kinds = checkRules(g3, rules).map((v) => v.kind).sort();
+  if (kinds.length === 2 && kinds[0] === 'call' && kinds[1] === 'import')
+    ok('rules: 同じ端点でも種類が違えば別の違反として数える');
+  else fail('kind 違いの違反を取りこぼした: ' + JSON.stringify(kinds));
 }
 
 // 設定サーフェス: Go/JS/Elixir の環境変数読み取りを検出
@@ -823,6 +845,9 @@ try {
 
   if (!html.includes('<script src="app.js">')) ok('export: 元の script 参照が残らない');
   else fail('export に <script src="app.js"> が残っている(置換文字列の $& 展開の疑い)');
+  // 起動オーバーレイはサーバ経由の解析待ち用。JS が動かないと不透明な板だけが残るので入れない
+  if (!html.includes('id="boot"') && html.includes('id="layout"')) ok('export: 起動オーバーレイを含まない');
+  else fail('export に起動オーバーレイが残っている(JS 無効時に画面が覆われる)');
 
   // インラインの JSON が元のモデルに戻せるか(< のエスケープが JSON を壊していないか)
   const m = /window\.STRATA_MODEL = ([\s\S]*?);<\/script>/.exec(html);

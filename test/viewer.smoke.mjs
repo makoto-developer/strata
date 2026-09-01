@@ -37,6 +37,10 @@ class El {
   }
   fire(type, ev) { for (const fn of this.handlers.get(type) || []) fn(ev); }
   setAttribute(k, v) { this.attrs[k] = v; }
+  getAttribute(k) { return this.attrs[k] ?? null; }
+  // 図タブが表示範囲(viewBox)を決めるのに使う。ヘッドレスなので固定の箱を返す
+  getBoundingClientRect() { return { left: 0, top: 0, width: 1200, height: 700 }; }
+  contains() { return true; }
   querySelector() { return new El('(sub)'); }
   querySelectorAll() { return []; }
   scrollIntoView() {}
@@ -110,8 +114,20 @@ for (const s of ['UserService', 'OrderService', 'GetUser', 'ListOrders', 'user.p
 }
 if (list.includes('6 RPC')) ok('カタログ: proto/service/RPC 集計 (' + (list.match(/\d+ proto ・ \d+ service ・ \d+ RPC/) || [''])[0] + ')');
 else fail('カタログ集計が想定外: ' + list.slice(0, 200));
-if (list.includes('deprecated') && list.includes('badge-stream')) ok('カタログ: deprecated / stream バッジ');
+// 既定では「コードに出てくるものだけ」が効いている。使っていない proto 定義が隠れることを確かめる
+const usedOnlyList = get('#apilist')._html;
+const clickExcl = (key) =>
+  get('#apilist').fire('click', { target: { closest: (s) => (s === '[data-chip-excl]' ? { dataset: { chipExcl: key } } : null) } });
+clickExcl('used'); // 解除 = すべての RPC を出す
+const allList = get('#apilist')._html;
+const countRpc = (html) => (html.match(/data-rpc="[^"]*#/g) || []).length;
+if (countRpc(allList) > countRpc(usedOnlyList) && usedOnlyList.includes('表示中'))
+  ok(`カタログ: 「コードに出てくるものだけ」が既定で効く (${countRpc(usedOnlyList)} → ${countRpc(allList)})`);
+else fail('「コードに出てくるものだけ」が効いていない');
+const list2 = allList;
+if (list2.includes('deprecated') && list2.includes('badge-stream')) ok('カタログ: deprecated / stream バッジ');
 else fail('deprecated / stream バッジがない');
+clickExcl('used'); // 既定(ON)に戻す
 if (list.includes('テストのみ')) ok('カタログ: テストのみ RPC の検出(ListUsers)');
 else fail('テストのみバッジがない');
 if (list.includes('rpcdoc') && list.includes('1 件取得')) ok('カタログ: RPC の説明文表示');

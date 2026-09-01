@@ -1,0 +1,13 @@
+syntax = "proto3";
+package acme.search.v1;
+option go_package = "example.com/acme/proto/search/v1;searchv1";
+
+service SearchService {
+  rpc Query(QueryRequest) returns (QueryResponse);
+  rpc Suggest(SuggestRequest) returns (SuggestResponse);
+}
+
+message QueryRequest { string q = 1; }
+message QueryResponse { repeated string hits = 1; }
+message SuggestRequest { string prefix = 1; }
+message SuggestResponse { repeated string words = 1; }

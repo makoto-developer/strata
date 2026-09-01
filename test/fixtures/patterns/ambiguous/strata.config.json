@@ -1,0 +1,23 @@
+{
+  "name": "ambiguous",
+  "services": [
+    {
+      "name": "caller",
+      "path": "caller"
+    }
+  ],
+  "indirection": {
+    "enabled": true,
+    "patterns": [
+      {
+        "name": "report-client",
+        "importPathPattern": "**/reportclient",
+        "resolveVia": "manifest",
+        "manifest": {
+          "path": "strata.manifest.json"
+        },
+        "comment": "生成物が手元に無いので、生成時のマニフェストで proto package を特定する"
+      }
+    ]
+  }
+}

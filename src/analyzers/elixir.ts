@@ -82,7 +82,7 @@ function exLeadingDoc(lines: string[], defIndex: number): string | undefined {
  * `#`、文字リテラル `?#` は誤ってコメント開始と見なさない(補間内の呼び出しは残す)。
  * 行をまたぐ補間や sigil までは追わない(検出目的では許容)。
  */
-function stripLineComment(line: string): string {
+export function stripLineComment(line: string): string {
   let inStr = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];

@@ -1,0 +1,1 @@
+{ "name": "streaming", "services": [{ "name": "app", "path": "app" }], "indirection": { "enabled": true } }

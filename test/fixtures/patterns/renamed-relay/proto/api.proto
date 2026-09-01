@@ -1,0 +1,17 @@
+syntax = "proto3";
+package acme.api.v1;
+option go_package = "example.com/acme/proto/api;apipb";
+
+// 外向けの公開 API。内部の UserService とは RPC 名が違う。
+service PublicService {
+  rpc ResolveAccount(ResolveAccountRequest) returns (ResolveAccountResponse);
+}
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+}
+
+message ResolveAccountRequest { string handle = 1; }
+message ResolveAccountResponse { string id = 1; }
+message GetUserRequest { string id = 1; }
+message GetUserResponse { string id = 1; }

@@ -72,7 +72,7 @@ export function parseImports(noComments: string): Array<{ alias?: string; path: 
 }
 
 /** 関数シグネチャの後ろから本体の '{' を探す(括弧の深さ 0 で最初に現れるもの)。 */
-function findBodyOpen(blanked: string, from: number): number {
+export function findBodyOpen(blanked: string, from: number): number {
   let depth = 0;
   for (let i = from; i < blanked.length; i++) {
     const ch = blanked[i];
@@ -146,7 +146,7 @@ function topAncestorId(ctx: Ctx, id: string): string {
   }
 }
 
-function receiverType(recvRaw: string): string | undefined {
+export function receiverType(recvRaw: string): string | undefined {
   const cleaned = recvRaw.replace(/\[[^\]]*\]/g, '').trim();
   if (cleaned === '') return undefined;
   const parts = cleaned.split(/\s+/);
@@ -283,6 +283,22 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
             ctx.goPkgImplServices.set(pkgId, set);
           }
           set.add(em[1]);
+        }
+        // どの型が実装しているかまで押さえる。1 パッケージが複数 service を実装すると
+        // メソッド名だけでは同定できない(Health のような共通名が衝突する)
+        const structRe = /^type\s+(\w+)\s+struct\s*\{([^{}]*)\}/gm;
+        let sm: RegExpExecArray | null;
+        while ((sm = structRe.exec(noComments)) !== null) {
+          const bodyRe = /\bUnimplemented(\w+)Server\b/g;
+          for (let bm = bodyRe.exec(sm[2]); bm; bm = bodyRe.exec(sm[2])) {
+            const key = `${pkgId}#${sm[1]}`;
+            let set = ctx.goImplTypeServices.get(key);
+            if (!set) {
+              set = new Set();
+              ctx.goImplTypeServices.set(key, set);
+            }
+            set.add(bm[1]);
+          }
         }
       }
 

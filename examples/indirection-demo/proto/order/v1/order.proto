@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package acme.order.v1;
+
+option go_package = "example.com/platform/proto/acme/order/v1;orderv1";
+
+service OrderService {
+  // 注文を確定する
+  rpc PlaceOrder(PlaceOrderRequest) returns (PlaceOrderResponse);
+}
+
+message PlaceOrderRequest { string user_id = 1; string sku = 2; }
+message PlaceOrderResponse { string order_id = 1; }

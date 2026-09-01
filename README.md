@@ -396,7 +396,7 @@ I が高いほど「多くに依存し変更の影響を受けやすい」、低
     { "name": "gateway", "path": "gateway" },
     { "name": "user-service", "path": "services/user" }
   ],
-  "exclude": ["experimental"],        // 除外(パス前方一致 or ディレクトリ名)
+  "exclude": ["experimental", "**/e2e/**"], // 除外(パス前方一致 / ディレクトリ名 / グロブ)
   "includeTests": false,              // テストコードをグラフに含めるか(既定: false)
   "testPaths": ["tools/test-client"], // テスト扱いにする追加パス
 
@@ -492,8 +492,21 @@ node strata/src/cli.ts diff base.json head.json   # 新規循環があれば exi
 - テキスト・構文レベルの静的解析(型推論なし)。**誤検出より取りこぼしを優先**する方針で、
   グラフに出ている依存は実在するものだけにしている
 - サービス間接続は proto を「正」とし、`go_package` / 生成スタブ / RPC 名の突き合わせで接続する
+- **生成クライアントライブラリを挟む構成**(proto → tag 付き生成物 → 別リポジトリの呼び出し元)は
+  `indirection` 設定で解決する。置き場所の規約は設定不要で、生成コードの中身
+  (フルメソッド名 `"/acme.user.v1.UserService/GetUser"`、または `typeName` と RPC 名の組)を
+  署名にして生成物を同定する。読みに行くファイルは拡張子・命名で足切りしており、
+  独自の命名は `artifactPaths` で足す。照合は proto の package を含む完全修飾名で行い、
+  決め手が無ければ繋がず「未解決」として残す
+- **Gateway / Federation のような中継層**は「中継候補」として印を付けるだけにしている。
+  呼び出し元がどの実装に到達するかは実行時に決まるため、層数・順序・到達先は示さない
 - interface 越しの呼び出し・高階関数・リフレクションは追跡しない。
-  メッセージキュー経由の依存は `messaging` 設定で検出(未設定なら対象外)
+  自前 Facade や DI コンテナ越しの gRPC 呼び出しも、呼び出し側にシンボルが残らないので追跡しない
+- メッセージキュー経由の依存は `messaging` 設定で検出(未設定なら対象外)。
+  トピック名が環境変数で与えられる場合は `infra` 設定で Kubernetes / Helm / Terraform から逆引きする。
+  実行時に組み立てられる名前は推測せず未解決として残す
+- 生成物の探索は既定では `node_modules` を歩かない(`artifactPaths` に書けば読む)
+- 解決できなかった参照は `strata unresolved` で一覧でき、設定を書く手掛かりになる
 - 詳細と各言語の対応範囲: [docs/SPEC.md](docs/SPEC.md)
 
 ## 開発

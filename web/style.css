@@ -39,6 +39,11 @@
   --cyc-fg: #9f1239;
   --kind-svc: #7c3aed;
   --kind-proto: #0891b2;
+  /* 図タブ: 言語の識別色 */
+  --lang-go: #0e7490;
+  --lang-ts: #1d4ed8;
+  --lang-py: #a16207;
+  --lang-ex: #7e22ce;
   --warn: #b7791f;
   /* コード配色 */
   --tok-c: #6b7f83;
@@ -88,6 +93,10 @@
     --cyc-fg: #fda4af;
     --kind-svc: #a78bfa;
     --kind-proto: #22d3ee;
+    --lang-go: #22d3ee;
+    --lang-ts: #7dd3fc;
+    --lang-py: #fbbf24;
+    --lang-ex: #c084fc;
     --warn: #e0af68;
     --tok-c: #7d8f93;
     --tok-s: #6ee7b7;
@@ -128,6 +137,10 @@
   --cyc-fg: #fda4af;
   --kind-svc: #a78bfa;
   --kind-proto: #22d3ee;
+  --lang-go: #22d3ee;
+  --lang-ts: #7dd3fc;
+  --lang-py: #fbbf24;
+  --lang-ex: #c084fc;
   --warn: #e0af68;
   --tok-c: #7d8f93;
   --tok-s: #6ee7b7;
@@ -297,6 +310,30 @@ body {
   pointer-events: none;
 }
 @keyframes strata-spin { to { transform: rotate(360deg); } }
+/* ---------- 読み込み中の表示(待たせる画面はすべてこれを使う) ---------- */
+.loadbox {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.loadbox .spin {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: strata-spin .8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loadbox .spin { animation: none; border-top-color: var(--line-strong); }
+}
+/* 起動時のオーバーレイ。JS が model を受け取るまで出しっぱなしにする */
+#boot { position: fixed; inset: 0; z-index: 40; background: var(--bg); }
 @media (prefers-reduced-motion: reduce) {
   #topbar .iconbtn.busy { animation: none; }
 }
@@ -549,6 +586,10 @@ body {
   padding-bottom: 4px;
 }
 #side ul { list-style: none; margin: 4px 0; padding: 0; }
+/* 図タブ: 「この API はどこから呼ばれているか」を選ぶ一覧 */
+#side .apipick-item { justify-content: space-between; }
+#side .apipick-item:hover { background: var(--hover); }
+#side .apipick-item.on { background: var(--focus-bg); font-weight: 600; }
 #side li { padding: 2px 4px; border-radius: 4px; cursor: pointer; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .svcbadge {
   display: inline-block;
@@ -687,10 +728,57 @@ body.tab-entries .searchwrap { display: none !important; }
 body.tab-diagram .structonly { display: none !important; }
 body.tab-diagram .searchwrap { display: none !important; }
 #diagramview { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#diagramview .dg-hint { padding: 8px 16px; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--line); }
-#diagramview .dg-up-word { color: var(--up); }
-#diagramview .dg-scroll { flex: 1; overflow: auto; }
-#dg-svg { display: block; margin: 0 auto; }
+#diagramview .dg-hint {
+  padding: 8px 16px;
+  color: var(--muted);
+  font-size: 11px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+#diagramview .dg-tools { display: flex; gap: 6px; align-items: center; white-space: nowrap; flex-wrap: wrap; }
+#diagramview .dg-legend { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+#diagramview .dg-lg { display: inline-flex; gap: 5px; align-items: center; }
+#diagramview .dg-lg i { width: 9px; height: 9px; border-radius: 2px; background: var(--line-strong); }
+#diagramview .dg-lg i.none { background: var(--band); border: 1px solid var(--line-strong); }
+#diagramview .dg-lg.lang-go i { background: var(--lang-go); }
+#diagramview .dg-lg.lang-ts i { background: var(--lang-ts); }
+#diagramview .dg-lg.lang-py i { background: var(--lang-py); }
+#diagramview .dg-lg.lang-ex i { background: var(--lang-ex); }
+#diagramview .dg-lg.hub i { background: transparent; border: 1.5px dashed var(--kind-proto); border-radius: 50%; }
+#diagramview .dg-lg.viol i { background: var(--up); }
+#diagramview .dg-zoom,
+#diagramview .dg-tog {
+  font: inherit;
+  color: var(--fg);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+#diagramview .dg-zoom:hover,
+#diagramview .dg-tog:hover { border-color: var(--accent); color: var(--accent); }
+#diagramview .dg-tog.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+#diagramview .dg-search {
+  font: inherit;
+  color: var(--fg);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 2px 8px;
+  width: 170px;
+}
+#diagramview .dg-search:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* 実寸で吐かず viewBox で拡大縮小するので、はみ出しはスクロールでなくズームで見る */
+#diagramview .dg-scroll { flex: 1; overflow: hidden; min-height: 0; }
+#dg-svg { display: block; width: 100%; height: 100%; touch-action: none; }
+#dg-svg.zoomed { cursor: grab; }
+#dg-svg:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#dg-svg.panning { cursor: grabbing; }
 #dg-svg .dg-band { fill: transparent; stroke: none; }
 #dg-svg .dg-band.alt { fill: var(--band); }
 #dg-svg .dg-lvl { fill: var(--faint); font-size: 10px; font-weight: 700; letter-spacing: .05em; }
@@ -698,6 +786,9 @@ body.tab-diagram .searchwrap { display: none !important; }
 #dg-svg .dg-edge:hover { opacity: 1; stroke: var(--accent); }
 #dg-svg .dg-edge.rpc { stroke-dasharray: 6 4; }
 #dg-svg .dg-edge.up { stroke: var(--up); }
+/* forbidden ルールに一致した依存。位置は実測、色は宣言されたポリシー */
+#dg-svg .dg-edge.violation { stroke: var(--up); opacity: 1; }
+#dg-svg .dg-edge.violation:hover { stroke: var(--up); }
 #dg-svg .dg-mk { fill: var(--down); }
 #dg-svg .dg-mk-up { fill: var(--up); }
 #dg-svg .dg-elabel { fill: var(--accent2-fg); font-size: 10.5px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; }
@@ -710,6 +801,32 @@ body.tab-diagram .searchwrap { display: none !important; }
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .10));
 }
 #dg-svg .dg-node:hover rect { stroke: var(--accent); stroke-width: 1.8; }
+/* 言語の識別色(箱の左端の細い帯) */
+#dg-svg .dg-langbar { fill: transparent; stroke: none; filter: none; }
+#dg-svg .lang-go .dg-langbar { fill: var(--lang-go); }
+#dg-svg .lang-ts .dg-langbar { fill: var(--lang-ts); }
+#dg-svg .lang-py .dg-langbar { fill: var(--lang-py); }
+#dg-svg .lang-ex .dg-langbar { fill: var(--lang-ex); }
+/* 共有ハブ(入次数が多く、入る線を畳んでいるもの) */
+#dg-svg .dg-node.hub > rect:first-of-type { stroke: var(--kind-proto); stroke-dasharray: 5 3; }
+/* 畳んだ線。ホバー・選択で開く(件数は箱の ⇠N と線の title に残る) */
+#dg-svg .dg-edge.bundled,
+#dg-svg .dg-elabel.bundled { display: none; }
+#dg-svg.hovering .dg-edge.bundled.rel,
+#dg-svg.hovering .dg-elabel.bundled.rel { display: block; }
+/* 絞り込みに一致しない箱 */
+#dg-svg .dg-node.dim { opacity: .22; }
+/* 右パネルで選んだ API: 呼び出し元と実装だけを残し、他は退かせる */
+#dg-svg .dg-node.apidim { opacity: .16; }
+#dg-svg .dg-edge.apidim,
+#dg-svg .dg-elabel.apidim { opacity: .1; }
+#dg-svg .dg-node.apicaller > rect:first-of-type { stroke: var(--out); stroke-width: 2.2; }
+#dg-svg .dg-node.apiimpl > rect:first-of-type { stroke: var(--accent); stroke-width: 2.6; }
+/* 実装が見つからない API は、定義(proto)の置き場所だけが手掛かり。実装とは分けて示す */
+#dg-svg .dg-node.apidef > rect:first-of-type { stroke: var(--kind-proto); stroke-width: 2.2; stroke-dasharray: 5 3; }
+#dg-svg .dg-edge.apihit { stroke: var(--out); opacity: 1; }
+/* 畳んだ線でも、選んだ API の経路なら見せる */
+#dg-svg .dg-edge.bundled.apihit { display: block; }
 /* 外部システム(自リポジトリ外)は破線枠で区別する */
 #dg-svg .dg-node.external rect { stroke-dasharray: 6 4; fill: var(--panel); }
 #dg-svg .dg-node.focused rect { stroke: var(--accent); stroke-width: 2.4; fill: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
@@ -1174,6 +1291,17 @@ body.tab-diff .searchwrap { display: none !important; }
 #apilist li.rpc-item .warnmark { font-size: 10px; }
 .badge-dead { color: var(--up); }
 .badge-noimpl { color: var(--accent2); }
+.badge-unres { color: var(--accent2); }
+.relaychip {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.protosec.unres .sum { color: var(--muted); }
+.unres-item.jump { cursor: pointer; }
 .badge-test { color: var(--accent); }
 .badge-dep {
   color: var(--muted);
