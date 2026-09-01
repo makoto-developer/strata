@@ -309,6 +309,39 @@ record('図: SVG 描画', svgBoxes > 0, `${svgBoxes} 要素`);
     svg.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true, cancelable: true }));
     return { fit, zin, back, bykey, reset: vw(), focusable: svg.getAttribute('tabindex') === '0' };
   });
+  // 右パネルで API を選ぶと、呼び出し元が図で分かるか
+  const pick = await page.evaluate(() => {
+    const svg = () => document.querySelector('#dg-svg');
+    const g = [...svg().querySelectorAll('.dg-node')].find(
+      (n) => (n.querySelector('.dg-sub') || {}).textContent && (n.querySelector('.dg-sub') || {}).textContent.includes('RPC'),
+    );
+    if (!g) return { skip: true };
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const item = document.querySelector('#side .apipick-item');
+    if (!item) return { noList: true };
+    item.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const s = svg();
+    const out = {
+      callers: s.querySelectorAll('.dg-node.apicaller').length,
+      target: s.querySelectorAll('.dg-node.apiimpl, .dg-node.apidef').length,
+      dimmed: s.querySelectorAll('.dg-node.apidim').length,
+      hit: s.querySelectorAll('.dg-edge.apihit').length,
+      chip: !!document.querySelector('#dg-apiclear'),
+    };
+    document.querySelector('#dg-apiclear').click();
+    out.clearedDim = document.querySelectorAll('#dg-svg .dg-node.apidim').length;
+    out.clearedChip = !!document.querySelector('#dg-apiclear');
+    return out;
+  });
+  if (pick.skip || pick.noList) {
+    record('図: API を選ぶと呼び出し元が分かる', false, pick.skip ? 'RPC を持つ箱がない' : '右パネルに API 一覧がない');
+  } else {
+    record('図: API を選ぶと呼び出し元が分かる', pick.callers > 0 && pick.target > 0 && pick.dimmed > 0 && pick.hit > 0,
+      `呼び出し元 ${pick.callers} / 対象 ${pick.target} / 減光 ${pick.dimmed} / 線 ${pick.hit}`);
+    record('図: API の強調を解除できる', pick.chip && pick.clearedDim === 0 && !pick.clearedChip,
+      `解除後 減光 ${pick.clearedDim} チップ ${pick.clearedChip}`);
+  }
+
   record('図: ＋ボタンで拡大', zoom.zin < zoom.fit, `${zoom.fit} → ${zoom.zin}`);
   record('図: 全体を表示で戻る', zoom.back === zoom.fit, `${zoom.zin} → ${zoom.back}`);
   record('図: キーボードで拡大縮小', zoom.focusable && zoom.bykey < zoom.fit && zoom.reset === zoom.fit,

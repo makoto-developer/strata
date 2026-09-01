@@ -378,6 +378,7 @@
     dgApiOnly: false, // 図: 公開 API を持つものだけ表示するか
     dgHop: false, // 図: 選択ノードから 1 ホップだけ表示するか
     dgQ: '', // 図: 絞り込み文字列(一致しないものを減光する)
+    dgApi: null, // 図: 右パネルで選んだ RPC。呼び出し元サービスを図で強調する
     tab: 'structure', // 'structure' | 'api'
     apiRpc: null, // API タブで選択中の RPC id
     apiSel: null, // フロー内で選択中のノード id(ソース表示対象)
@@ -1109,6 +1110,7 @@
         if (tv === n.id) bump(inMap, tu);
       }
       const DRILL_CAP = 30; // 1 サービスあたりの関数レベル表示上限
+      const API_PICK_CAP = 60; // 図で追う API 一覧の表示上限(それ以上はカタログ側で探す)
       // 関数レベルの内訳(呼び出し元関数 → 呼び出し先 RPC/関数)。クリックで該当ノードへ。
       const drillList = (d) => {
         const items = d.items.slice().sort((a, b) => b.count - a.count);
@@ -1145,15 +1147,20 @@
       let called = 0;
       let testOnly = 0;
       const protoSvcNames = new Set();
+      const ownRpcs = []; // 図タブで「どこから呼ばれているか」を選ぶための一覧
       for (const nn of model.nodes) {
         if (nn.kind !== 'rpc') continue;
         const owner = implTopOf(nn.id) || chain(nn.id)[0]; // 実装サービス優先で帰属
         if (owner !== n.id) continue;
         rpcTotal++;
         if (nn.label.includes('.')) protoSvcNames.add(nn.label.slice(0, nn.label.indexOf('.')));
+        const callerTops = new Set([...(rpcCallers.get(nn.id) || [])].map((c) => chain(c)[0]));
         if ((rpcCallers.get(nn.id) || new Set()).size > 0) called++;
         else if (((nn.meta || {}).testCallers || 0) > 0) testOnly++;
+        ownRpcs.push({ id: nn.id, label: nn.label, callers: callerTops.size });
       }
+      // 呼ばれている数の多い順。図で追いたいのはたいてい呼び出し元の多い API
+      ownRpcs.sort((a, b) => b.callers - a.callers || a.label.localeCompare(b.label));
       const dead = rpcTotal - called - testOnly;
       const apiSum =
         rpcTotal > 0
@@ -1161,6 +1168,24 @@
             `<ul><li class="nostyle">本番から呼ばれる<span class="cnt">${called}</span></li>` +
             `<li class="nostyle">テストのみ<span class="cnt">${testOnly}</span></li>` +
             `<li class="nostyle">未使用<span class="cnt">${dead}</span></li></ul>` +
+            // 図タブでは API を選んで「どのサービスから呼ばれているか」を図の上で見られるようにする
+            (state.tab === 'diagram'
+              ? `<div class="sub">選ぶと、その API を呼んでいるサービスを図で強調します</div>` +
+                `<ul class="apipick">` +
+                ownRpcs
+                  .slice(0, API_PICK_CAP)
+                  .map(
+                    (r) =>
+                      `<li class="apipick-item${state.dgApi === r.id ? ' on' : ''}" data-dgapi="${esc(r.id)}" ` +
+                      `title="${esc(r.id)}">⚡ ${esc(r.label)}` +
+                      `<span class="cnt">${r.callers > 0 ? r.callers + ' サービスから' : '呼び出し元なし'}</span></li>`,
+                  )
+                  .join('') +
+                (ownRpcs.length > API_PICK_CAP
+                  ? `<li class="sub">…他 ${ownRpcs.length - API_PICK_CAP} 件は API カタログで</li>`
+                  : '') +
+                `</ul>`
+              : '') +
             `<div class="btns"><button id="btn-svc-api">⚡ API カタログで見る</button></div>`
           : '';
       const isolated =
@@ -2708,8 +2733,14 @@
 
   const DG_LANGS = [['go', 'Go'], ['ts', 'TS / JS'], ['py', 'Python'], ['ex', 'Elixir']];
 
+  /** ツールバーに出す「選択中の API」。絞り込みで 1 件も出ないときも、選択中であることは見せる。 */
+  function dgApiChip() {
+    if (state.dgApi === null || !byId.has(state.dgApi)) return null;
+    return { label: (byId.get(state.dgApi) || {}).label || state.dgApi, callers: 0, visible: false };
+  }
+
   /** 図タブのヘッダー(凡例 + 絞り込み + ズーム)。ノードが 0 件の案内でも同じものを出す。 */
-  function dgToolbar(isolatedCount, langs, hubCount, violCount) {
+  function dgToolbar(isolatedCount, langs, hubCount, violCount, api) {
     const on = (flag) => (flag ? ' on' : '');
     const legend = DG_LANGS.filter(([code]) => langs.has(code))
       .map(([code, name]) => `<span class="dg-lg lang-${code}"><i></i>${name}</span>`)
@@ -2725,6 +2756,10 @@
         `<span class="dg-lg" title="そのサービスから下へ伸びる依存チェーンの長さ(強連結成分に潰したうえでの最長路)です。0 は何にも依存しない土台側。宣言されたアーキテクチャ層ではありません"><i class="none"></i>帯 = 依存の深さ</span>` +
       `</span>` +
       `<span class="dg-tools">` +
+        (api
+          ? `<button id="dg-apiclear" class="dg-tog on" title="この API の強調を解除する">` +
+            `⚡ ${esc(api.label)}（${api.visible ? `呼び出し元 ${api.callers}` : '表示中のサービスに該当なし'}）✕</button>`
+          : '') +
         `<input id="dg-q" class="dg-search" type="search" placeholder="サービス名で絞り込み" value="${esc(state.dgQ)}">` +
         `<button id="dg-hop" class="dg-tog${on(state.dgHop)}" title="選択したサービスと、その直接の依存だけを表示する">1 ホップ</button>` +
         `<button id="dg-api" class="dg-tog${on(state.dgApiOnly)}" title="公開 API(RPC / HTTP / GraphQL)を持つサービスだけを表示する">API のみ</button>` +
@@ -2799,7 +2834,7 @@
 
     if (tops.length === 0) {
       diagramViewEl.innerHTML =
-        `<div class="dg-hint">${dgToolbar(isolated.length, new Set(), 0, 0)}</div>` +
+        `<div class="dg-hint">${dgToolbar(isolated.length, new Set(), 0, 0, dgApiChip())}</div>` +
         `<div class="projwrap"><div class="sub">絞り込みの条件に合うサービスがありません。上の絞り込みを外してください</div></div>`;
       return;
     }
@@ -2846,6 +2881,31 @@
     const hubs = new Set([...inDeg].filter(([, n]) => n >= DG_HUB_MIN).map(([id]) => id));
     const isBundled = (e) => hubs.has(e.to) && e.viol === 0 && e.from !== state.focus && e.to !== state.focus;
     const langs = new Set(tops.map((id) => (byId.get(id) || {}).lang).filter(Boolean));
+
+    // 右パネルで選んだ API。呼んでいるサービスと実装サービスだけを残して他を減光する
+    let apiSel = null;
+    if (state.dgApi !== null && byId.has(state.dgApi)) {
+      const callers = new Set([...(rpcCallers.get(state.dgApi) || [])].map((c) => chain(c)[0]));
+      // 実装は 1 つとは限らない(共有 contract の別実装)。全部を強調する
+      const impls = new Set([...(rpcImpls.get(state.dgApi) || [])].map((i) => chain(i)[0]));
+      // 実装が見つからない API は、定義(proto)の置き場所だけが手掛かり。実装とは別扱いにする
+      const def = impls.size === 0 ? chain(state.dgApi)[0] : null;
+      const shown = new Set(tops);
+      const visible = [...callers, ...impls, ...(def === null ? [] : [def])].some((id) => shown.has(id));
+      apiSel = {
+        callers,
+        impls,
+        def,
+        visible, // 絞り込みで全部消えたら減光しない(画面が真っ白に見えるだけで手掛かりが無い)
+        label: (byId.get(state.dgApi) || {}).label || state.dgApi,
+      };
+    }
+    const apiRoleOf = (id) => {
+      if (apiSel === null || !apiSel.visible) return '';
+      if (apiSel.callers.has(id)) return ' apicaller';
+      if (apiSel.impls.has(id)) return ' apiimpl';
+      return id === apiSel.def ? ' apidef' : ' apidim';
+    };
     // レイアウト
     const BOXH = 54;
     const VGAP = 96;
@@ -2962,9 +3022,13 @@
       const width = Math.min(3.6, 1.1 + Math.log2(e.rpc + e.code + 1) * 0.55);
       const violNote =
         e.viol > 0 ? `\n禁止依存 ${e.viol}/${e.edges} 本(${[...e.rules].join(' / ')})` : '';
+      // 選んだ API の「呼び出し元 → 実装(または定義)」の線だけを立てる
+      const apiTarget = (id) => apiSel.impls.has(id) || id === apiSel.def;
+      const apiEdge =
+        apiSel === null || !apiSel.visible ? '' : apiSel.callers.has(e.from) && apiTarget(e.to) ? ' apihit' : ' apidim';
       const cls =
         `dg-edge${up ? ' up' : ''}${e.viol > 0 ? ' violation' : ''}` +
-        `${e.rpc + e.http + e.gql > 0 ? ' rpc' : ''}${isBundled(e) ? ' bundled' : ''}`;
+        `${e.rpc + e.http + e.gql > 0 ? ' rpc' : ''}${isBundled(e) ? ' bundled' : ''}${apiEdge}`;
       svg.push(
         `<path d="${d}" class="${cls}" stroke-width="${width.toFixed(1)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" marker-end="url(#${up || e.viol > 0 ? 'darr-up' : 'darr'})">` +
           `<title>${esc(labelOf(e.from))} → ${esc(labelOf(e.to))}(${[
@@ -2982,7 +3046,7 @@
       const mx = a.x + (b.x - a.x) * 0.45;
       const my = a.y === b.y ? a.y - 50 : a.y + (b.y - a.y) * 0.45 + (up ? 8 : 0);
       if (boundaryLabel) {
-        svg.push(`<text x="${mx}" y="${my}" class="dg-elabel${up ? ' up' : ''}${isBundled(e) ? ' bundled' : ''}" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${boundaryLabel}</text>`);
+        svg.push(`<text x="${mx}" y="${my}" class="dg-elabel${up ? ' up' : ''}${isBundled(e) ? ' bundled' : ''}${apiEdge}" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${boundaryLabel}</text>`);
       }
     }
     // ノード
@@ -2993,7 +3057,8 @@
       const sub = subOf(id);
       const cls =
         `dg-node k-${n.kind} lang-${n.lang || 'na'}` +
-        `${id.startsWith('ext:') ? ' external' : ''}${state.focus === id ? ' focused' : ''}${hubs.has(id) ? ' hub' : ''}`;
+        `${id.startsWith('ext:') ? ' external' : ''}${state.focus === id ? ' focused' : ''}` +
+        `${hubs.has(id) ? ' hub' : ''}${apiRoleOf(id)}`;
       svg.push(
         `<g class="${cls}" data-node="${esc(id)}">` +
           `<title>${esc(labelOf(id))}${sub ? ' — ' + esc(sub) : ''}\n` +
@@ -3011,7 +3076,13 @@
     dgView = null; // 再描画したら表示位置は全体に戻す
     diagramViewEl.innerHTML =
       `<div class="dg-hint" title="クリック = 詳細パネル(依存・公開API・経路探索) ・ ホバー = 関連する線を強調 ・ 右クリック = そのサービスを非表示 ・ ⌘/Ctrl + ホイールかキーボード(← ↑ → ↓ / + − 0)で拡大縮小">` +
-        dgToolbar(isolated.length, langs, hubs.size, edges.filter((e) => e.viol > 0).length) +
+        dgToolbar(
+          isolated.length,
+          langs,
+          hubs.size,
+          edges.filter((e) => e.viol > 0).length,
+          apiSel === null ? null : { label: apiSel.label, callers: apiSel.callers.size, visible: apiSel.visible },
+        ) +
       `</div>` +
       `<div class="dg-scroll"><svg id="dg-svg" xmlns="http://www.w3.org/2000/svg" tabindex="0" role="group" aria-label="アーキテクチャ図(矢印キーで移動、+ − で拡大縮小、0 で全体表示)" preserveAspectRatio="xMidYMid meet" viewBox="0 0 ${totalW} ${totalH}">${svg.join('')}</svg></div>`;
     dgApplyView();
@@ -3219,6 +3290,12 @@
     if (ev.target.id === 'dg-fit') {
       dgView = null;
       dgApplyView();
+      return;
+    }
+    if (ev.target.id === 'dg-apiclear') {
+      state.dgApi = null;
+      renderDiagram();
+      renderSide();
       return;
     }
     if (ev.target.id === 'dg-in') return dgZoomAt(0.8);
@@ -3985,6 +4062,15 @@
     render();
   });
   sideEl.addEventListener('click', (ev) => {
+    const apiPick = ev.target.closest('[data-dgapi]');
+    if (apiPick) {
+      ev.stopPropagation();
+      const id = apiPick.dataset.dgapi;
+      state.dgApi = state.dgApi === id ? null : id; // 同じものを押したら解除
+      renderDiagram();
+      renderSide();
+      return;
+    }
     const bmRemove = ev.target.closest('[data-bm-remove]');
     if (bmRemove) {
       ev.stopPropagation();

@@ -562,6 +562,10 @@ body {
   padding-bottom: 4px;
 }
 #side ul { list-style: none; margin: 4px 0; padding: 0; }
+/* 図タブ: 「この API はどこから呼ばれているか」を選ぶ一覧 */
+#side .apipick-item { justify-content: space-between; }
+#side .apipick-item:hover { background: var(--hover); }
+#side .apipick-item.on { background: var(--focus-bg); font-weight: 600; }
 #side li { padding: 2px 4px; border-radius: 4px; cursor: pointer; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .svcbadge {
   display: inline-block;
@@ -788,6 +792,17 @@ body.tab-diagram .searchwrap { display: none !important; }
 #dg-svg.hovering .dg-elabel.bundled.rel { display: block; }
 /* 絞り込みに一致しない箱 */
 #dg-svg .dg-node.dim { opacity: .22; }
+/* 右パネルで選んだ API: 呼び出し元と実装だけを残し、他は退かせる */
+#dg-svg .dg-node.apidim { opacity: .16; }
+#dg-svg .dg-edge.apidim,
+#dg-svg .dg-elabel.apidim { opacity: .1; }
+#dg-svg .dg-node.apicaller > rect:first-of-type { stroke: var(--out); stroke-width: 2.2; }
+#dg-svg .dg-node.apiimpl > rect:first-of-type { stroke: var(--accent); stroke-width: 2.6; }
+/* 実装が見つからない API は、定義(proto)の置き場所だけが手掛かり。実装とは分けて示す */
+#dg-svg .dg-node.apidef > rect:first-of-type { stroke: var(--kind-proto); stroke-width: 2.2; stroke-dasharray: 5 3; }
+#dg-svg .dg-edge.apihit { stroke: var(--out); opacity: 1; }
+/* 畳んだ線でも、選んだ API の経路なら見せる */
+#dg-svg .dg-edge.bundled.apihit { display: block; }
 /* 外部システム(自リポジトリ外)は破線枠で区別する */
 #dg-svg .dg-node.external rect { stroke-dasharray: 6 4; fill: var(--panel); }
 #dg-svg .dg-node.focused rect { stroke: var(--accent); stroke-width: 2.4; fill: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
