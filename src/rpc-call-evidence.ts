@@ -9,9 +9,9 @@
 // 解決フェーズなので、多少広めに拾っても嘘の依存にはならない(一致しなければ捨てられる)。
 
 import * as path from 'node:path';
-import { stripSource } from './lex.ts';
+import { matchBrace, stripSource } from './lex.ts';
 import { stripPython } from './analyzers/python.ts';
-import { parseImports } from './analyzers/golang.ts';
+import { findBodyOpen, parseImports, receiverType } from './analyzers/golang.ts';
 import { stripLineComment } from './analyzers/elixir.ts';
 import { readFileText, type Ctx, type Project, type RpcCallEvidence } from './context.ts';
 
@@ -178,16 +178,27 @@ function callerNodeOf(ctx: Ctx, project: Project, wsRel: string): string {
   return project.nodeId;
 }
 
-/** Go の関数ノード id(見つからなければ undefined)。線を関数単位まで下ろすために使う。 */
+/**
+ * Go の関数ノード id(見つからなければ undefined)。線を関数単位まで下ろすために使う。
+ * id の組み立ては golang.ts の関数ノードと必ず揃える — レシーバを落とすと
+ * メソッドから出る RPC 呼び出しが全部パッケージ単位に落ち、
+ * 「この API を誰が呼んでいるか」を関数から遡れなくなる(Go の usecase 層はほぼメソッド)。
+ */
 function goFuncAt(ctx: Ctx, pkgId: string, blanked: string, index: number): string | undefined {
-  const decl = /^func\s+(?:\([^)]*\)\s*)?(\w+)\s*\(/gm;
-  let name: string | undefined;
+  const decl = /^func\s+(?:\(([^)]*)\)\s*)?([A-Za-z_]\w*)/gm;
+  let label: string | undefined;
   for (let m = decl.exec(blanked); m; m = decl.exec(blanked)) {
     if (m.index > index) break;
-    name = m[1];
+    // 「直前の宣言」ではなく「本体に入っているか」で決める。
+    // パッケージ変数の初期化子(func F(){}; var x = c.Get())が F の呼び出しになっていた
+    const open = findBodyOpen(blanked, decl.lastIndex);
+    if (open < 0 || open > index) continue;
+    if (matchBrace(blanked, open) < index) continue;
+    const recv = m[1] !== undefined ? receiverType(m[1]) : undefined;
+    label = recv ? `${recv}.${m[2]}` : m[2];
   }
-  if (name === undefined) return undefined;
-  const funcId = `${pkgId}#${name}`;
+  if (label === undefined) return undefined;
+  const funcId = `${pkgId}#${label}`;
   return ctx.builder.get(funcId) ? funcId : undefined;
 }
 

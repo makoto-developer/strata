@@ -1,0 +1,5 @@
+syntax = "proto3";
+package chain.b.v1;
+service BService { rpc GetB(GetBReq) returns (GetBRes); }
+message GetBReq { string id = 1; }
+message GetBRes { string v = 1; }

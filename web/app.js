@@ -248,16 +248,38 @@
     if (!callAdjUp.has(e.to)) callAdjUp.set(e.to, []);
     callAdjUp.get(e.to).push({ to: e.from, kind: e.kind, sites: e.sites });
   }
-  function traceTree(focusId, dir, maxDepth) {
+  // 木は分岐数の深さ乗で膨らむ。実測で分岐 3・深さ 12 が 240 万ノードになり、
+  // そのまま DOM にすると固まる。総ノード数で頭を打たせて、打ち切りは … で示す
+  const TRACE_MAX_NODES = 600;
+
+  function traceTree(focusId, dir, maxDepth, opts = {}) {
     const adj = dir === 'up' ? callAdjUp : callAdjDown;
+    let made = 0;
     const build = (id, path, depth, kind, sites) => {
+      made++;
       if (path.has(id)) return { id, kind, sites, cycle: true, children: [] };
-      if (depth > maxDepth) return { id, kind, sites, cycle: false, children: [], truncated: true };
+      if (depth > maxDepth || made > TRACE_MAX_NODES)
+        return { id, kind, sites, cycle: false, children: [], truncated: true };
       path.add(id);
       // 兄弟は「親の中での呼び出し行順」に並べる(=コードを上から読む順)。
       // 呼び出し位置が無いエッジ(import 等)は後ろに名前順で置く
-      const children = (adj.get(id) || [])
-        .slice()
+      // 同じ呼び出しが「パッケージ単位」と「関数単位」の 2 本で入ってくることがある
+      // (RPC は呼び出し元パッケージにも関数にも線を張る)。粗いほうは情報を足さないうえ、
+      // それ以上さかのぼれないので「そこで途切れた」ように見える。細かいほうがあれば落とす
+      const kids = (adj.get(id) || []).slice();
+      const coarse = new Set();
+      if (opts.dedupeCoarse) {
+        const kidIds = new Set(kids.map((k) => k.to));
+        for (const k of kids) {
+          let p = (byId.get(k.to) || {}).parent;
+          for (let guard = 0; p !== undefined && guard < 100; guard++) {
+            if (kidIds.has(p)) coarse.add(p);
+            p = (byId.get(p) || {}).parent;
+          }
+        }
+      }
+      const children = kids
+        .filter((k) => !(opts.dedupeCoarse && coarse.has(k.to)) && !(opts.skipMocks && isMockNode(k.to)))
         .sort((a, b) => {
           const la = a.sites && a.sites.length > 0 ? a.sites[0].l : Infinity;
           const lb = b.sites && b.sites.length > 0 ? b.sites[0].l : Infinity;
@@ -404,6 +426,8 @@
     // 取り込んだ .proto には、このワークスペースが使わない RPC も全部入っている。
     // 既定では「呼ばれている / 実装されている」ものだけに絞る(チップで解除できる)
     apiUsedOnly: true,
+    // mock(gomock 等の生成物・手書きのモック)を呼び出し元・実装から外す
+    apiExcludeMocks: false,
     apiCollapsed: new Set(), // 折りたたまれた proto の id
     apiFilterCollapsed: false, // API カタログのフィルタを畳む(sticky ヘッダを小さく)
     searchExcludeTests: false, // 構造ビュー: テスト関連(testsupport / *_test 等)を表示から除外
@@ -1315,6 +1339,23 @@
     .filter((n) => n.kind === 'proto' || (n.kind === 'artifact' && hasRpcChild(n.id)))
     .sort((a, b) => a.id.localeCompare(b.id));
   const artifactCount = protoNodes.filter((n) => n.kind === 'artifact').length;
+  // mock 判定: パス片・ファイル名の mock/mocks、型名の Mock〜。
+  // gomock(mock_foo.go / mocks/foo.go)と手書きの MockFooClient のどちらも拾う
+  const MOCK_PATH = /(^|[/_.-])mocks?([/_.-]|$)/i;
+  const MOCK_TYPE = /(^|[#./])Mock[A-Z0-9_]/;
+  function isMockNode(id) {
+    if (MOCK_PATH.test(id) || MOCK_TYPE.test(id)) return true;
+    const file = ((byId.get(id) || {}).meta || {}).file;
+    return typeof file === 'string' && MOCK_PATH.test(file);
+  }
+  /** mock を外した集合(除外オフならそのまま返す)。 */
+  function withoutMocks(set) {
+    if (!state.apiExcludeMocks || !set || set.size === 0) return set || new Set();
+    const out = new Set();
+    for (const id of set) if (!isMockNode(id)) out.add(id);
+    return out;
+  }
+
   const rpcCallers = new Map(); // rpc id -> Set(呼び出し元 func id)
   const rpcImpls = new Map(); // rpc id -> Set(実装 func id)
   for (const e of model.edges) {
@@ -1432,7 +1473,8 @@
       state.apiSvcFilter !== '' ||
       state.apiCallerFilter !== '' ||
       state.apiUsage.size > 0 ||
-      state.apiAttrs.size > 0;
+      state.apiAttrs.size > 0 ||
+      state.apiExcludeMocks;
     // 空表示の案内文だけは「コードに出てくるものだけ」も絞り込みとして数える。
     // filtering 側に入れると、既定 ON なので節が常に開きっぱなしになる(「全て畳む」が効かない)
     const anyFilter = filtering || state.apiUsedOnly;
@@ -1465,8 +1507,8 @@
           const label = byId.get(id).label;
           const svc = label.includes('.') ? label.slice(0, label.indexOf('.')) : '(service)';
           if (state.apiSvcFilter && svc !== state.apiSvcFilter) continue;
-          const callers = rpcCallers.get(id) || new Set();
-          const impls = rpcImpls.get(id) || new Set();
+          const callers = withoutMocks(rpcCallers.get(id));
+          const impls = withoutMocks(rpcImpls.get(id));
           const meta = (byId.get(id) || {}).meta || {};
           const testN = state.apiExcludeTests ? 0 : meta.testCallers || 0;
           const callerSvcs = new Set([...callers].map((c) => topLabelOfId(c)));
@@ -1585,8 +1627,8 @@
       if (surfaceBlocked || nodes.length === 0) return '';
       const bySvc = new Map();
       for (const n of nodes) {
-        const callers = rpcCallers.get(n.id) || new Set();
-        const impls = rpcImpls.get(n.id) || new Set();
+        const callers = withoutMocks(rpcCallers.get(n.id));
+        const impls = withoutMocks(rpcImpls.get(n.id));
         const callerSvcs = new Set([...callers].map((c) => topLabelOfId(c)));
         if (state.apiCallerFilter) {
           if (state.apiCallerFilter === '(test)') continue;
@@ -1699,6 +1741,8 @@
       cycleChip(state.apiAttrs, 'stream', 'stream', 'ストリーミング RPC') +
       `</div></div>` +
       `<div class="frow chips"><label>オプション</label><div class="chiprow">` +
+      exclChip('mocks', state.apiExcludeMocks, 'mock を除外',
+        'gomock などの生成物・手書きのモック(パスや型名の mock / Mock〜)を、呼び出し元・実装から外す') +
       exclChip('used', state.apiUsedOnly, 'コードに出てくるものだけ',
         'このワークスペースのコードから呼ばれている、または実装されている RPC だけを表示する。\n' +
         '取り込んだ proto カタログのうち、使っていない定義を隠す(HTTP / GraphQL はコード由来なので常に表示)') +
@@ -1714,7 +1758,8 @@
       state.apiUsage.size +
       state.apiAttrs.size +
       (state.apiExcludeTests ? 1 : 0) +
-      (state.apiUsedOnly ? 1 : 0);
+      (state.apiUsedOnly ? 1 : 0) +
+      (state.apiExcludeMocks ? 1 : 0);
     const ftoggle =
       `<button class="ftoggle${activeFilters > 0 ? ' active' : ''}" data-ftoggle="1" ` +
       `title="フィルタを${state.apiFilterCollapsed ? '開く' : '畳む'}">` +
@@ -1826,10 +1871,13 @@
       return;
     }
     const n = byId.get(state.apiRpc);
-    const downTree = traceTree(n.id, 'down', 12);
-    const upTree = traceTree(n.id, 'up', 6);
-    const impls = rpcImpls.get(n.id) || new Set();
-    const callers = rpcCallers.get(n.id) || new Set();
+    const skipMocks = state.apiExcludeMocks;
+    const downTree = traceTree(n.id, 'down', 12, { skipMocks, dedupeCoarse: true });
+    // 上流は「別のマイクロサービスまで」辿れる深さが要る。
+    // handler → usecase → …(数段)→ 実装 → RPC → 呼び出し元 とホップするため
+    const upTree = traceTree(n.id, 'up', 12, { skipMocks, dedupeCoarse: true });
+    const impls = withoutMocks(rpcImpls.get(n.id));
+    const callers = withoutMocks(rpcCallers.get(n.id));
     const protoFile = fileOf(n) || (n.parent ? n.parent : '');
     const implNote =
       impls.size > 0
@@ -2578,6 +2626,8 @@
     if (exclEl) {
       if (exclEl.dataset.chipExcl === 'used') {
         state.apiUsedOnly = !state.apiUsedOnly;
+      } else if (exclEl.dataset.chipExcl === 'mocks') {
+        state.apiExcludeMocks = !state.apiExcludeMocks;
       } else {
         state.apiExcludeTests = !state.apiExcludeTests;
         if (state.apiExcludeTests) state.apiUsage.delete('testonly'); // 無視中は「テストのみ」は無意味
