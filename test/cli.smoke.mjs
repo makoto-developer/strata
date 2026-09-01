@@ -845,6 +845,9 @@ try {
 
   if (!html.includes('<script src="app.js">')) ok('export: 元の script 参照が残らない');
   else fail('export に <script src="app.js"> が残っている(置換文字列の $& 展開の疑い)');
+  // 起動オーバーレイはサーバ経由の解析待ち用。JS が動かないと不透明な板だけが残るので入れない
+  if (!html.includes('id="boot"') && html.includes('id="layout"')) ok('export: 起動オーバーレイを含まない');
+  else fail('export に起動オーバーレイが残っている(JS 無効時に画面が覆われる)');
 
   // インラインの JSON が元のモデルに戻せるか(< のエスケープが JSON を壊していないか)
   const m = /window\.STRATA_MODEL = ([\s\S]*?);<\/script>/.exec(html);
