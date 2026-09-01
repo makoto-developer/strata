@@ -1,0 +1,5 @@
+syntax = "proto3";
+package chain.a.v1;
+service AService { rpc GetA(GetAReq) returns (GetARes); }
+message GetAReq { string id = 1; }
+message GetARes { string v = 1; }

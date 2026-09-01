@@ -72,7 +72,7 @@ export function parseImports(noComments: string): Array<{ alias?: string; path: 
 }
 
 /** 関数シグネチャの後ろから本体の '{' を探す(括弧の深さ 0 で最初に現れるもの)。 */
-function findBodyOpen(blanked: string, from: number): number {
+export function findBodyOpen(blanked: string, from: number): number {
   let depth = 0;
   for (let i = from; i < blanked.length; i++) {
     const ch = blanked[i];
@@ -146,7 +146,7 @@ function topAncestorId(ctx: Ctx, id: string): string {
   }
 }
 
-function receiverType(recvRaw: string): string | undefined {
+export function receiverType(recvRaw: string): string | undefined {
   const cleaned = recvRaw.replace(/\[[^\]]*\]/g, '').trim();
   if (cleaned === '') return undefined;
   const parts = cleaned.split(/\s+/);

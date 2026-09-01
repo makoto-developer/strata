@@ -139,6 +139,33 @@ function scanWithout(dir, key) {
   else fail('生成クライアント: 除外したはずの場所から生成物を拾っている');
 }
 
+// --- パターン B3: A ← B ← C の 3 サービス連鎖。「この API を呼ぶ別サービス」まで遡れるか ---
+{
+  const model = scan(path.join(patternsDir, 'cross-service'));
+  const has = (kind, from, toEnds) =>
+    model.edges.some((e) => e.kind === kind && e.from === from && e.to.endsWith(toEnds));
+
+  // メソッドから出る RPC 呼び出しに関数単位の線が付くこと。
+  // ここが付かないと、上流をたどっても呼び出し元パッケージで行き止まりになる
+  if (has('rpc', 'svc-b#Usecase.Run', 'AService.GetA'))
+    ok('3 サービス連鎖: メソッドからの RPC 呼び出しが関数単位で繋がる');
+  else fail('メソッドからの呼び出しがパッケージ単位で止まっている');
+
+  // A の RPC → 呼び出し元(B の usecase)→ B のハンドラ →(impl)→ B の RPC → C の関数、と辿れること
+  const chain =
+    has('rpc', 'svc-b#Usecase.Run', 'AService.GetA') &&
+    has('call', 'svc-b#BServer.GetB', 'svc-b#Usecase.Run') &&
+    model.edges.some((e) => e.kind === 'impl' && e.from.endsWith('BService.GetB') && e.to === 'svc-b#BServer.GetB') &&
+    has('rpc', 'svc-c#Caller.Fetch', 'BService.GetB');
+  if (chain) ok('3 サービス連鎖: A の API から、B を越えて C まで遡れる線が揃う');
+  else fail('サービス境界を越える上流の連鎖が繋がっていない');
+
+  // mock は呼び出し元として検出される(ビューアの「mock を除外」で落とす対象)
+  if (has('rpc', 'svc-b/mocks#MockAServiceClient.GetA', 'AService.GetA'))
+    ok('3 サービス連鎖: mock も呼び出し元として現れる(除外フィルタの対象)');
+  else fail('mock の呼び出しが検出されていない(フィルタの検証対象が無い)');
+}
+
 // --- パターン C: 同じ proto を Go 実装 / TS 呼び出し / Python 呼び出しが囲む ---
 {
   const model = scan(path.join(patternsDir, 'polyglot'));
@@ -167,7 +194,9 @@ function scanWithout(dir, key) {
   // manifest を与えると曖昧性が解ける(短名より先に設定を試す)
   const model = scan(dir);
   const edges = rpcEdges(model);
-  if (edges.length === 1 && edges[0].to.includes('team-b/'))
+  // 1 つの呼び出しはパッケージ単位と関数単位の両方に線を張るので、本数ではなく行き先で見る
+  const targets = new Set(edges.map((e) => e.to));
+  if (edges.length > 0 && targets.size === 1 && [...targets][0].includes('team-b/'))
     ok('同名 service: manifest で指した側(team-b)に決着する');
   else fail(`同名 service: manifest で解決できていない (${edges.map((e) => e.to).join(',')})`);
 }
@@ -176,7 +205,9 @@ function scanWithout(dir, key) {
 {
   const model = scan(path.join(patternsDir, 'versioned-api'));
   const edges = rpcEdges(model);
-  if (edges.length === 1 && edges[0].to.includes('/v2/')) ok('版違い: proto package で v2 を選ぶ');
+  const vTargets = new Set(edges.map((e) => e.to));
+  if (edges.length > 0 && vTargets.size === 1 && [...vTargets][0].includes('/v2/'))
+    ok('版違い: proto package で v2 を選ぶ');
   else fail(`版違い: v2 に解決されていない (${edges.map((e) => e.to).join(',')})`);
   if (!edges.some((e) => e.to.includes('/v1/'))) ok('版違い: 同名の v1 へは繋がない');
   else fail('版違い: v1 へ誤接続している');
@@ -186,7 +217,8 @@ function scanWithout(dir, key) {
 {
   const model = scan(path.join(patternsDir, 'package-collision'));
   const edges = rpcEdges(model);
-  if (edges.length === 1 && edges[0].to.startsWith('artifact:'))
+  const pTargets = new Set(edges.map((e) => e.to));
+  if (edges.length > 0 && pTargets.size === 1 && [...pTargets][0].startsWith('artifact:'))
     ok('package 衝突: 提携先の API(生成物側)へ繋ぐ');
   else fail(`package 衝突: 期待した接続でない (${edges.map((e) => e.to).join(',')})`);
   if (!edges.some((e) => e.to.includes('identity.proto')))

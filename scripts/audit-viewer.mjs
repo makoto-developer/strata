@@ -242,7 +242,23 @@ const apiItems = await page.$$eval('#apilist [data-rpc], #apilist .apirow, #apil
     await page.click('[data-chip-excl="used"]');
     await page.waitForTimeout(400);
     const back = await n();
-    record('API: 「コードに出てくるものだけ」で絞れて戻せる', off > before && back === before, `${before} → ${off} → ${back}`);
+      record('API: 「コードに出てくるものだけ」で絞れて戻せる', off > before && back === before, `${before} → ${off} → ${back}`);
+  }
+  {
+    // mock 除外チップ(このデモにモックは無いので、押せて例外が出ないことを見る)
+    const before = errors.length;
+    const toggled = await page.evaluate(() => {
+      const pick = () => document.querySelector('[data-chip-excl="mocks"]');
+      if (!pick()) return null;
+      // クリックで再描画されるので、状態は毎回引き直したノードから読む
+      pick().click();
+      const on = pick().classList.contains('on');
+      pick().click();
+      return { on, off: !pick().classList.contains('on') };
+    });
+    await page.waitForTimeout(400);
+    record('API: 「mock を除外」チップが動く', !!toggled && toggled.on && toggled.off && errors.length === before,
+      toggled ? JSON.stringify(toggled) : 'チップが無い');
   }
 }
 
