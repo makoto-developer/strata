@@ -302,7 +302,7 @@ function scanWithout(dir, key) {
     ok('デモ: 手掛かりの無い呼び出しは位置つきで未解決に残す');
   else fail('デモ: 未解決の記録が期待どおりでない');
 
-  if (model.schemaVersion === 2) ok('デモ: モデルに schemaVersion が入る');
+  if (model.schemaVersion === 3) ok('デモ: モデルに schemaVersion が入る');
   else fail('デモ: schemaVersion がない');
 }
 

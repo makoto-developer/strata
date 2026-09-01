@@ -721,6 +721,7 @@ body.tab-diagram .searchwrap { display: none !important; }
 #diagramview .dg-lg.lang-py i { background: var(--lang-py); }
 #diagramview .dg-lg.lang-ex i { background: var(--lang-ex); }
 #diagramview .dg-lg.hub i { background: transparent; border: 1.5px dashed var(--kind-proto); border-radius: 50%; }
+#diagramview .dg-lg.viol i { background: var(--up); }
 #diagramview .dg-zoom,
 #diagramview .dg-tog {
   font: inherit;
@@ -757,6 +758,9 @@ body.tab-diagram .searchwrap { display: none !important; }
 #dg-svg .dg-edge:hover { opacity: 1; stroke: var(--accent); }
 #dg-svg .dg-edge.rpc { stroke-dasharray: 6 4; }
 #dg-svg .dg-edge.up { stroke: var(--up); }
+/* forbidden ルールに一致した依存。位置は実測、色は宣言されたポリシー */
+#dg-svg .dg-edge.violation { stroke: var(--up); opacity: 1; }
+#dg-svg .dg-edge.violation:hover { stroke: var(--up); }
 #dg-svg .dg-mk { fill: var(--down); }
 #dg-svg .dg-mk-up { fill: var(--up); }
 #dg-svg .dg-elabel { fill: var(--accent2-fg); font-size: 10.5px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; }

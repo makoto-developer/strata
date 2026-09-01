@@ -23,6 +23,7 @@ import { detectHttp } from './analyzers/http.ts';
 import { detectGraphql } from './analyzers/graphql.ts';
 import { collectRpcCallEvidence } from './rpc-call-evidence.ts';
 import { resolveIndirection } from './indirection.ts';
+import { markViolations } from './rules.ts';
 
 /**
  * 言語アナライザの登録(register)→接続(link)の 2 相を表す。
@@ -402,7 +403,11 @@ export function scan(rootDir: string): Graph {
 
   const graph = builder.build(wsName, rootAbs);
   if (ctx.unresolved.length > 0) graph.unresolved = ctx.unresolved;
-  if (ctx.config.forbidden && ctx.config.forbidden.length > 0) graph.rules = ctx.config.forbidden;
+  if (ctx.config.forbidden && ctx.config.forbidden.length > 0) {
+    graph.rules = ctx.config.forbidden;
+    // 違反したエッジに印を付ける。ビューアはこれを見て図の線を変える(正本は strata check)
+    markViolations(graph, ctx.config.forbidden);
+  }
   if (ctx.config.thresholds) graph.thresholds = ctx.config.thresholds;
   return graph;
 }
