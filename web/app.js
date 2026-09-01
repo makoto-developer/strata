@@ -388,6 +388,9 @@
     apiUsage: new Map(), // 使用状況: 'called' | 'testonly' | 'dead'(含むは OR、除外は常に適用)
     apiAttrs: new Map(), // 属性: 'noimpl' | 'deprecated' | 'stream'(同上。使用状況とは AND)
     apiExcludeTests: false, // テスト呼び出しを無視して本番コードだけで判定
+    // 取り込んだ .proto には、このワークスペースが使わない RPC も全部入っている。
+    // 既定では「呼ばれている / 実装されている」ものだけに絞る(チップで解除できる)
+    apiUsedOnly: true,
     apiCollapsed: new Set(), // 折りたたまれた proto の id
     apiFilterCollapsed: false, // API カタログのフィルタを畳む(sticky ヘッダを小さく)
     searchExcludeTests: false, // 構造ビュー: テスト関連(testsupport / *_test 等)を表示から除外
@@ -1393,6 +1396,9 @@
       state.apiCallerFilter !== '' ||
       state.apiUsage.size > 0 ||
       state.apiAttrs.size > 0;
+    // 空表示の案内文だけは「コードに出てくるものだけ」も絞り込みとして数える。
+    // filtering 側に入れると、既定 ON なので節が常に開きっぱなしになる(「全て畳む」が効かない)
+    const anyFilter = filtering || state.apiUsedOnly;
     const groups = new Map(); // ディレクトリ -> proto nodes
     const allSvcs = new Set(); // フィルタ用のサービス名一覧
     let rpcTotal = 0;
@@ -1434,6 +1440,9 @@
               continue;
             }
           }
+          // 取り込んだ proto カタログのうち、このワークスペースのコードに出てこない RPC を落とす。
+          // 呼び出しか実装のどちらかがあれば「出てくる」とみなす
+          if (state.apiUsedOnly && callers.size === 0 && impls.size === 0 && testN === 0) continue;
           // 使用状況(排他的な3区分)と属性: グループ内は 含む(OR)+ 除外、グループ間は AND
           const usage = callers.size > 0 ? 'called' : testN > 0 ? 'testonly' : 'dead';
           if (state.apiUsage.get(usage) === 'exc') continue;
@@ -1498,7 +1507,7 @@
           });
         }
         rpcShown += rpcItems.size;
-        if (rpcItems.size === 0 && filtering) continue; // フィルタ中は一致なしの proto を出さない
+        if (rpcItems.size === 0 && anyFilter) continue; // 絞り込み中は一致なしの proto を出さない(見出しだけ残さない)
         // service ごとに RPC を束ねる(RPC label は "Service.Rpc")。呼び出し数順は各グループ内で適用
         let entries = [...rpcItems.entries()];
         if (state.apiSort === 'calls') entries = entries.sort((a, b) => b[1].calls - a[1].calls);
@@ -1653,6 +1662,9 @@
       cycleChip(state.apiAttrs, 'stream', 'stream', 'ストリーミング RPC') +
       `</div></div>` +
       `<div class="frow chips"><label>オプション</label><div class="chiprow">` +
+      exclChip('used', state.apiUsedOnly, 'コードに出てくるものだけ',
+        'このワークスペースのコードから呼ばれている、または実装されている RPC だけを表示する。\n' +
+        '取り込んだ proto カタログのうち、使っていない定義を隠す(HTTP / GraphQL はコード由来なので常に表示)') +
       exclChip('tests', state.apiExcludeTests, 'テスト呼び出しを無視', 'テストからの呼び出しを無視して、本番コードだけで使用状況を判定する') +
       `</div></div>` +
       `</div>`;
@@ -1664,7 +1676,8 @@
       (state.apiSort !== 'name' ? 1 : 0) +
       state.apiUsage.size +
       state.apiAttrs.size +
-      (state.apiExcludeTests ? 1 : 0);
+      (state.apiExcludeTests ? 1 : 0) +
+      (state.apiUsedOnly ? 1 : 0);
     const ftoggle =
       `<button class="ftoggle${activeFilters > 0 ? ' active' : ''}" data-ftoggle="1" ` +
       `title="フィルタを${state.apiFilterCollapsed ? '開く' : '畳む'}">` +
@@ -1684,7 +1697,7 @@
       `</div>` +
       unresolvedSection() +
       (sections.join('') ||
-        (filtering
+        (anyFilter
           ? '<div class="sum">フィルタに一致する API がありません</div>'
           : '<div class="sum">API(proto / HTTP ルート / GraphQL スキーマ)が見つかりませんでした。</div>'));
     if (typeof updateApiHeadMin === 'function') updateApiHeadMin();
@@ -2509,8 +2522,12 @@
     }
     const exclEl = ev.target.closest('[data-chip-excl]');
     if (exclEl) {
-      state.apiExcludeTests = !state.apiExcludeTests;
-      if (state.apiExcludeTests) state.apiUsage.delete('testonly'); // 無視中は「テストのみ」は無意味
+      if (exclEl.dataset.chipExcl === 'used') {
+        state.apiUsedOnly = !state.apiUsedOnly;
+      } else {
+        state.apiExcludeTests = !state.apiExcludeTests;
+        if (state.apiExcludeTests) state.apiUsage.delete('testonly'); // 無視中は「テストのみ」は無意味
+      }
       renderApi();
       return;
     }
@@ -2669,11 +2686,17 @@
       const b = targetTop(e.to);
       if (a === b || !topSet.has(a) || !topSet.has(b)) continue;
       const key = a + '\u0000' + b;
-      const cur = edgeMap.get(key) || { from: a, to: b, rpc: 0, http: 0, gql: 0, code: 0 };
+      const cur = edgeMap.get(key) || { from: a, to: b, rpc: 0, http: 0, gql: 0, code: 0, viol: 0, edges: 0, rules: new Set() };
       if (e.kind === 'rpc' || e.kind === 'proto') cur.rpc += e.count;
       else if (e.kind === 'http') cur.http += e.count;
       else if (e.kind === 'graphql') cur.gql += e.count;
       else cur.code += e.count;
+      cur.edges++;
+      // 1 本の線は多数のエッジをまとめている。全部が違反とは限らないので本数で持つ
+      if (e.violates) {
+        cur.viol++;
+        cur.rules.add(e.violates);
+      }
       edgeMap.set(key, cur);
     }
     return { tops, edges: [...edgeMap.values()] };
@@ -2686,7 +2709,7 @@
   const DG_LANGS = [['go', 'Go'], ['ts', 'TS / JS'], ['py', 'Python'], ['ex', 'Elixir']];
 
   /** 図タブのヘッダー(凡例 + 絞り込み + ズーム)。ノードが 0 件の案内でも同じものを出す。 */
-  function dgToolbar(isolatedCount, langs, hubCount) {
+  function dgToolbar(isolatedCount, langs, hubCount, violCount) {
     const on = (flag) => (flag ? ' on' : '');
     const legend = DG_LANGS.filter(([code]) => langs.has(code))
       .map(([code, name]) => `<span class="dg-lg lang-${code}"><i></i>${name}</span>`)
@@ -2695,6 +2718,9 @@
       `<span class="dg-legend">${legend}` +
         (hubCount > 0
           ? `<span class="dg-lg hub" title="入次数が ${DG_HUB_MIN} 以上のサービス。入ってくる線は畳んであり、ホバーか選択で開きます"><i></i>共有ハブ ${hubCount}</span>`
+          : '') +
+        (violCount > 0
+          ? `<span class="dg-lg viol" title="strata.config.json の forbidden ルールに一致した依存。線にカーソルを合わせるとルール名と本数が出ます。完全な一覧は strata check"><i></i>禁止依存 ${violCount}</span>`
           : '') +
         `<span class="dg-lg" title="そのサービスから下へ伸びる依存チェーンの長さ(強連結成分に潰したうえでの最長路)です。0 は何にも依存しない土台側。宣言されたアーキテクチャ層ではありません"><i class="none"></i>帯 = 依存の深さ</span>` +
       `</span>` +
@@ -2773,7 +2799,7 @@
 
     if (tops.length === 0) {
       diagramViewEl.innerHTML =
-        `<div class="dg-hint">${dgToolbar(isolated.length, new Set(), 0)}</div>` +
+        `<div class="dg-hint">${dgToolbar(isolated.length, new Set(), 0, 0)}</div>` +
         `<div class="projwrap"><div class="sub">絞り込みの条件に合うサービスがありません。上の絞り込みを外してください</div></div>`;
       return;
     }
@@ -2818,7 +2844,7 @@
     const inDeg = new Map();
     for (const e of edges) inDeg.set(e.to, (inDeg.get(e.to) || 0) + 1);
     const hubs = new Set([...inDeg].filter(([, n]) => n >= DG_HUB_MIN).map(([id]) => id));
-    const isBundled = (e) => hubs.has(e.to) && e.from !== state.focus && e.to !== state.focus;
+    const isBundled = (e) => hubs.has(e.to) && e.viol === 0 && e.from !== state.focus && e.to !== state.focus;
     const langs = new Set(tops.map((id) => (byId.get(id) || {}).lang).filter(Boolean));
     // レイアウト
     const BOXH = 54;
@@ -2934,15 +2960,19 @@
         d = `M ${a.x} ${a.y - BOXH / 2} C ${a.x} ${a.y - BOXH / 2 - 44}, ${b.x} ${b.y + BOXH / 2 + 44}, ${b.x} ${b.y + BOXH / 2}`;
       }
       const width = Math.min(3.6, 1.1 + Math.log2(e.rpc + e.code + 1) * 0.55);
-      const cls = `dg-edge${up ? ' up' : ''}${e.rpc + e.http + e.gql > 0 ? ' rpc' : ''}${isBundled(e) ? ' bundled' : ''}`;
+      const violNote =
+        e.viol > 0 ? `\n禁止依存 ${e.viol}/${e.edges} 本(${[...e.rules].join(' / ')})` : '';
+      const cls =
+        `dg-edge${up ? ' up' : ''}${e.viol > 0 ? ' violation' : ''}` +
+        `${e.rpc + e.http + e.gql > 0 ? ' rpc' : ''}${isBundled(e) ? ' bundled' : ''}`;
       svg.push(
-        `<path d="${d}" class="${cls}" stroke-width="${width.toFixed(1)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" marker-end="url(#${up ? 'darr-up' : 'darr'})">` +
+        `<path d="${d}" class="${cls}" stroke-width="${width.toFixed(1)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" marker-end="url(#${up || e.viol > 0 ? 'darr-up' : 'darr'})">` +
           `<title>${esc(labelOf(e.from))} → ${esc(labelOf(e.to))}(${[
             e.rpc > 0 ? '⚡RPC ' + e.rpc : '',
             e.http > 0 ? '⇄HTTP ' + e.http : '',
             e.gql > 0 ? '◈GraphQL ' + e.gql : '',
             e.code > 0 ? 'code ' + e.code : '',
-          ].filter(Boolean).join(' ・ ')})</title></path>`,
+          ].filter(Boolean).join(' ・ ')})${esc(violNote)}</title></path>`,
       );
       const boundaryLabel = [
         e.rpc > 0 ? '⚡' + e.rpc : '',
@@ -2981,7 +3011,7 @@
     dgView = null; // 再描画したら表示位置は全体に戻す
     diagramViewEl.innerHTML =
       `<div class="dg-hint" title="クリック = 詳細パネル(依存・公開API・経路探索) ・ ホバー = 関連する線を強調 ・ 右クリック = そのサービスを非表示 ・ ⌘/Ctrl + ホイールかキーボード(← ↑ → ↓ / + − 0)で拡大縮小">` +
-        dgToolbar(isolated.length, langs, hubs.size) +
+        dgToolbar(isolated.length, langs, hubs.size, edges.filter((e) => e.viol > 0).length) +
       `</div>` +
       `<div class="dg-scroll"><svg id="dg-svg" xmlns="http://www.w3.org/2000/svg" tabindex="0" role="group" aria-label="アーキテクチャ図(矢印キーで移動、+ − で拡大縮小、0 で全体表示)" preserveAspectRatio="xMidYMid meet" viewBox="0 0 ${totalW} ${totalH}">${svg.join('')}</svg></div>`;
     dgApplyView();

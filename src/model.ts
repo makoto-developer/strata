@@ -75,6 +75,8 @@ export interface GEdge {
   sites?: Array<{ f: string; l: number }>;
   /** この呼び出しが経由した生成物(artifact)の node id。呼び出し元が実際に import している事実だけを持つ */
   via?: string[];
+  /** forbidden ルールに一致したときのルール名(ビューアが図で色を変える。正本は strata check) */
+  violates?: string;
 }
 
 /** 未解決参照の理由。UI とドキュメントの表示文言はこのキーで引く。 */
@@ -129,7 +131,7 @@ export interface Graph {
 }
 
 /** 現在のモデルスキーマ版。フィールドを追加・改名したら上げる。 */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** ツールのバージョン。リリースタグと package.json の version と必ず一致させる
  *  (test/cli.smoke.mjs が 3 者の一致を検査する)。 */

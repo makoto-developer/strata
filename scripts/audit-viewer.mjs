@@ -178,6 +178,26 @@ for (const [label, sel] of [['説明書リンク', '#docslink'], ['ソースリ�
 await page.click('#tab-api');
 await page.waitForTimeout(800);
 const apiItems = await page.$$eval('#apilist [data-rpc], #apilist .apirow, #apilist li', (e) => e.length).catch(() => 0);
+// 取り込んだ proto カタログのうち、使っていない定義を隠すトグル
+{
+  await page.evaluate(() => { if (!document.querySelector('.filters')) document.querySelector('.ftoggle').click(); });
+  await page.waitForTimeout(300);
+  const n = () => page.evaluate(() => document.querySelectorAll('#apilist .rpc-item').length);
+  const chip = await page.$('[data-chip-excl="used"]');
+  if (!chip) {
+    record('API: 「コードに出てくるものだけ」', false, 'チップが無い');
+  } else {
+    const before = await n();
+    await page.click('[data-chip-excl="used"]');
+    await page.waitForTimeout(400);
+    const off = await n();
+    await page.click('[data-chip-excl="used"]');
+    await page.waitForTimeout(400);
+    const back = await n();
+    record('API: 「コードに出てくるものだけ」で絞れて戻せる', off > before && back === before, `${before} → ${off} → ${back}`);
+  }
+}
+
 record('API: カタログ描画', apiItems > 0, `${apiItems} 件`);
 const firstApi = await page.$('#apilist [data-rpc]');
 if (firstApi) {
