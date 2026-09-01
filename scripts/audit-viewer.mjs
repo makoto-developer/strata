@@ -54,6 +54,54 @@ const text = (sel) => page.textContent(sel).catch(() => '');
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1800);
 
+// 起動オーバーレイ: 消し忘れると画面全体を覆って何も操作できなくなる
+{
+  const boot = await page.evaluate(() => {
+    const el = document.querySelector('#boot');
+    if (!el) return { gone: true };
+    const r = el.getBoundingClientRect();
+    return { gone: false, w: Math.round(r.width), h: Math.round(r.height) };
+  });
+  record('起動オーバーレイが消えている', boot.gone, boot.gone ? '' : `残っている ${boot.w}x${boot.h}`);
+}
+
+// 待たせる画面のローディング表示(/source を遅らせて確かめる)
+{
+  await page.route('**/source*', async (route) => {
+    await new Promise((r) => setTimeout(r, 1200));
+    await route.continue();
+  });
+  await page.click('#tab-api');
+  await page.waitForTimeout(800);
+  const shown = await page.evaluate(() => {
+    const it = document.querySelector('#apilist .rpc-item');
+    if (it) it.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return !!it;
+  });
+  await page.waitForTimeout(700);
+  await page.evaluate(() => {
+    const fn = document.querySelector('#apiflow [data-id]');
+    if (fn) fn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await page.waitForTimeout(300);
+  const loading = await page.evaluate(() => {
+    const box = document.querySelector('#apisrc .loadbox');
+    if (!box) return { box: false };
+    const spin = box.querySelector('.spin');
+    const r = spin ? spin.getBoundingClientRect() : { width: 0 };
+    return { box: true, text: box.textContent.trim(), spin: Math.round(r.width) };
+  });
+  await page.waitForTimeout(1500);
+  const done = await page.evaluate(() => ({
+    box: !!document.querySelector('#apisrc .loadbox'),
+    code: !!document.querySelector('#apisrc pre.code'),
+  }));
+  await page.unroute('**/source*');
+  record('ソース読み込み中にローディングが出る', shown && loading.box && loading.spin > 0,
+    loading.box ? `${loading.text}(spinner ${loading.spin}px)` : 'ローディングが出ない');
+  record('読み込み後はローディングが消えてコードが出る', !done.box && done.code, JSON.stringify(done));
+}
+
 // ---------- タブ ----------
 const tabs = [
   ['構造', '#tab-structure', '#main'],

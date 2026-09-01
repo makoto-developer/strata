@@ -92,6 +92,9 @@ proto の RPC・HTTP エンドポイント・GraphQL フィールドを 1 つの
   <img alt="図タブ" src="{{ site.baseurl }}/assets/shots/diagram-light.png">
 </picture>
 
+時間のかかる操作（起動時の解析・ソースの取得・ファイル一覧・差分の比較）では、
+その場にスピナーと説明が出ます。固まったように見えたら、まずその表示を確認してください。
+
 ## エントリーポイントタブ — 「どこから読み始めればいい?」
 
 `func main`(プロセス起動点)、LiveView などの画面、操作イベントを一覧します。

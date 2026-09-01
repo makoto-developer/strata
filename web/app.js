@@ -6,6 +6,14 @@
   const PROJ =
     typeof location !== 'undefined' ? new URLSearchParams(location.search).get('p') : null;
   const projQS = (sep) => (PROJ ? `${sep}p=${encodeURIComponent(PROJ)}` : '');
+  // 起動オーバーレイ。model.json はリクエストのたびに解析するので数秒かかることがある。
+  // 待ちが終わったら必ず外す — 外し損ねると不透明な板が画面全体を覆って何も操作できない
+  const dropBoot = () => {
+    if (typeof document.getElementById !== 'function') return;
+    const boot = document.getElementById('boot');
+    if (boot && boot.remove) boot.remove();
+  };
+
   let model;
   if (window.STRATA_MODEL) {
     model = window.STRATA_MODEL;
@@ -15,6 +23,7 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       model = await r.json();
     } catch (err) {
+      dropBoot(); // 外さないと、この下で出す再試行の案内がオーバーレイに隠れる
       // 取得失敗を握りつぶすと画面が真っ白・無言になるため、原因と再試行導線を出す。
       const host = document.getElementById('layout') || document.body;
       host.textContent = '';
@@ -37,6 +46,9 @@
       return;
     }
   }
+  // モデルは手元にある。この先は同期処理なので、ここで外しておけば
+  // 初期化中に例外が出ても画面が板で覆われたままにならない
+  dropBoot();
 
   // ---------- 索引 ----------
   const byId = new Map(model.nodes.map((n) => [n.id, n]));
@@ -1878,6 +1890,11 @@
       `<div class="flow">${renderFlowNode(downTree, undefined, true, 'down')}</div>`;
   }
 
+  /** 読み込み中の表示。待たせる画面はすべてこれを出す(無言で固まって見えるのを避ける)。 */
+  function loadingHtml(message) {
+    return `<div class="loadbox" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>${esc(message)}</div>`;
+  }
+
   // ---------- ソースビューア ----------
   const srcCache = new Map(); // 相対パス -> Promise<string>
   function fetchSource(rel) {
@@ -1917,6 +1934,7 @@
     treeFilter: '',
     treeExpanded: new Set(),
     filesPromise: null, // /files の結果キャッシュ
+    renderSeq: 0, // 描画の世代。読み込み中に別ファイルを開かれたら古い結果を捨てる
     history: [], // 定義ジャンプ等の「戻る」用
     blameVisible: false, // git blame ガターの表示
     blameCache: new Map(), // rel -> {byLine: Map(行 -> info)} | {error}
@@ -2332,6 +2350,10 @@
         `<code>strata serve</code> で起動すると、ここに実際のコードが表示されます。</div>`;
       return;
     }
+    // 取得を待つ間、前のファイルのコードを出したままにしない(別ファイルを開いたつもりで
+    // 前のコードを読んでしまう)。ヘッダーだけ先に描いて本文を読み込み中にする
+    const token = ++srcState.renderSeq;
+    apiSrcEl.innerHTML = head + `<div class="srcbody">` + loadingHtml('ソースを読み込んでいます…') + `</div>`;
     let blame = null;
     let blameNote = '';
     if (srcState.blameVisible && !IS_STATIC) {
@@ -2379,6 +2401,12 @@
     if (srcState.treeVisible) {
       let files = [];
       try {
+        if (srcState.filesPromise === null && token === srcState.renderSeq) {
+          // 初回はワークスペース全体を歩くので待たせる。枠だけ先に出す
+          // (追い越されていたら書かない — 新しく開いたファイルの表示を潰してしまう)
+          apiSrcEl.innerHTML =
+            head + `<div class="srcbody"><div id="srctree">${loadingHtml('ファイル一覧を読み込んでいます…')}</div>${codeHtml}</div>`;
+        }
         files = await fetchFileList();
       } catch {
         // 一覧が取れなくてもコード表示は続行
@@ -2389,6 +2417,7 @@
         `<div class="tlist">${treeListHtml(files)}</div>` +
         `</div>`;
     }
+    if (token !== srcState.renderSeq) return; // 次の描画に追い越されたので捨てる
     apiSrcEl.innerHTML = head + `<div class="srcbody">` + treeHtml + codeHtml + `</div>`;
     if (scrollToLine && lineNo !== null) {
       const target = apiSrcEl.querySelector('#L' + lineNo);
@@ -3485,6 +3514,12 @@
         '<div class="diffwrap"><div class="sub">エクスポートされた HTML では差分比較は使えません(git が必要です)</div></div>';
       return;
     }
+    if (diffState.refs === null && diffState.error === '') {
+      // ref 一覧の取得中。git のブランチ数が多いと待たされる
+      diffViewEl.innerHTML =
+        `<div class="diffwrap"><h2>差分</h2>${loadingHtml('ブランチ・タグの一覧を読み込んでいます…')}</div>`;
+      return;
+    }
     if (diffState.refs && diffState.refs.git === false) {
       diffViewEl.innerHTML =
         '<div class="diffwrap"><div class="sub">このプロジェクトは git リポジトリではないため、差分比較は使えません</div></div>';
@@ -3501,7 +3536,9 @@
       `<button id="diff-run"${diffState.busy ? ' disabled' : ''} title="2 つの ref を解析して差分を出す(数秒かかります)">${diffState.busy ? '解析中…' : '比較する'}</button>` +
       `</div>` +
       (diffState.error ? `<div class="sub derr">${esc(diffState.error)}</div>` : '') +
-      diffResultHtml() +
+      (diffState.busy
+        ? loadingHtml('2 つの ref を解析しています… 大きなリポジトリでは数秒かかります')
+        : diffResultHtml()) +
       `</div>`;
   }
 

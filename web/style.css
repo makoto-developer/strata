@@ -310,6 +310,30 @@ body {
   pointer-events: none;
 }
 @keyframes strata-spin { to { transform: rotate(360deg); } }
+/* ---------- 読み込み中の表示(待たせる画面はすべてこれを使う) ---------- */
+.loadbox {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.loadbox .spin {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: strata-spin .8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loadbox .spin { animation: none; border-top-color: var(--line-strong); }
+}
+/* 起動時のオーバーレイ。JS が model を受け取るまで出しっぱなしにする */
+#boot { position: fixed; inset: 0; z-index: 40; background: var(--bg); }
 @media (prefers-reduced-motion: reduce) {
   #topbar .iconbtn.busy { animation: none; }
 }

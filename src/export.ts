@@ -25,8 +25,12 @@ export function exportHtml(model: Graph): string {
     return source.replace(needle, () => replacement);
   };
 
+  // 起動オーバーレイはサーバ経由の解析待ち用。モデルを埋め込んだ HTML には出番がなく、
+  // JS が無効・失敗したときに不透明な板だけが残るので取り除く
+  const noBoot = html.replace(/^.*id="boot".*\n/m, '');
+
   return put(
-    put(html, '<link rel="stylesheet" href="style.css">', `<style>\n${css}\n</style>`),
+    put(noBoot, '<link rel="stylesheet" href="style.css">', `<style>\n${css}\n</style>`),
     '<script src="app.js"></script>',
     `<script>window.STRATA_MODEL = ${json};</script>\n<script>\n${js}\n</script>`,
   );
