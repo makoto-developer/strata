@@ -284,6 +284,22 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
           }
           set.add(em[1]);
         }
+        // どの型が実装しているかまで押さえる。1 パッケージが複数 service を実装すると
+        // メソッド名だけでは同定できない(Health のような共通名が衝突する)
+        const structRe = /^type\s+(\w+)\s+struct\s*\{([^{}]*)\}/gm;
+        let sm: RegExpExecArray | null;
+        while ((sm = structRe.exec(noComments)) !== null) {
+          const bodyRe = /\bUnimplemented(\w+)Server\b/g;
+          for (let bm = bodyRe.exec(sm[2]); bm; bm = bodyRe.exec(sm[2])) {
+            const key = `${pkgId}#${sm[1]}`;
+            let set = ctx.goImplTypeServices.get(key);
+            if (!set) {
+              set = new Set();
+              ctx.goImplTypeServices.set(key, set);
+            }
+            set.add(bm[1]);
+          }
+        }
       }
 
       const isMainPkg = /^package main\b/m.test(noComments);

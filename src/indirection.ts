@@ -81,6 +81,23 @@ function methodMatches(m: ArtifactMethod, ev: RpcCallEvidence): boolean {
   return m.service === ev.service && (m.method === ev.method || lowerCamel(m.method) === ev.method);
 }
 
+/**
+ * 生成物を置くディレクトリノードを返す。トップレベルに置くと
+ * 「生成クライアントのパッケージ数 = 図の箱数」になって図が破綻するため、必ず親を与える。
+ */
+function artifactParent(ctx: Ctx, dir: string): string | undefined {
+  const parentDir = path.posix.dirname(dir);
+  if (parentDir === '.' || parentDir === '') return undefined;
+  let base = '';
+  for (let cur = parentDir; cur !== '' && cur !== '.'; cur = path.posix.dirname(cur)) {
+    if (ctx.builder.get(cur)) {
+      base = cur;
+      break;
+    }
+  }
+  return ctx.builder.ensureDirChain(parentDir, base, base);
+}
+
 /** 生成物ノードを立て、元 proto から generates エッジ(contract → artifact)を張る。 */
 function registerArtifacts(ctx: Ctx, artifacts: GeneratedArtifact[], index: RpcIndex): void {
   for (const artifact of artifacts) {
@@ -91,6 +108,7 @@ function registerArtifacts(ctx: Ctx, artifacts: GeneratedArtifact[], index: RpcI
     ctx.builder.addNode({
       id: artifact.id,
       label: path.posix.basename(artifact.dir) || artifact.dir,
+      parent: artifactParent(ctx, artifact.dir),
       kind: 'artifact',
       meta: {
         file: artifact.files[0],
@@ -305,6 +323,48 @@ function markRelayCandidates(ctx: Ctx): number {
   return marked;
 }
 
+/**
+ * サーバ実装を RPC に繋ぐ。
+ *
+ * golang.ts の実装検出は「解決済みの proto を import しているファイル」が前提だが、
+ * 生成クライアントが別リポジトリにある構成では import が間接層でしか解けず、実装側だけが
+ * 繋がらないまま残る。すると呼び出しの矢印が実装サービスに届かず、共有 proto の箱に集まる。
+ * ここでは Unimplemented<Service>Server の埋め込み(生成コード由来の強い証拠)を起点に繋ぎ直す。
+ */
+function linkServerImpls(ctx: Ctx, index: RpcIndex): number {
+  // service -> それを実装している型の funcId 接頭辞("pkgId#Type")
+  const ownersOf = new Map<string, string[]>();
+  for (const [typeKey, services] of ctx.goImplTypeServices) {
+    for (const service of services) {
+      const list = ownersOf.get(service);
+      if (list) list.push(typeKey);
+      else ownersOf.set(service, [typeKey]);
+    }
+  }
+  if (ownersOf.size === 0) return 0;
+
+  // 1 つの RPC を複数のサービスが実装することはある(共有 contract の別実装)。
+  // 重複判定は「その RPC が繋がっているか」ではなく、この辺そのものの有無で行う
+  const existing = new Set<string>();
+  for (const e of ctx.builder.edges.values()) if (e.kind === 'impl') existing.add(`${e.from}\u0000${e.to}`);
+
+  let linked = 0;
+  for (const [key, infos] of index.byShort) {
+    const dot = key.indexOf('.');
+    const owners = ownersOf.get(key.slice(0, dot));
+    // 同じ Service.Method が複数の proto にあるなら取り違えるので繋がない
+    if (!owners || infos.length !== 1) continue;
+    for (const owner of owners) {
+      const funcId = `${owner}.${key.slice(dot + 1)}`;
+      if (!ctx.builder.get(funcId) || existing.has(`${infos[0].rpcId}\u0000${funcId}`)) continue;
+      ctx.builder.addEdge(infos[0].rpcId, funcId, 'impl');
+      existing.add(`${infos[0].rpcId}\u0000${funcId}`);
+      linked++;
+    }
+  }
+  return linked;
+}
+
 /** 解決した証拠をエッジにする(経由地があれば via / hops を残す)。 */
 function linkResolved(ctx: Ctx, ev: RpcCallEvidence, res: Resolution): void {
   const site = { f: ev.file, l: ev.line };
@@ -326,6 +386,7 @@ export function resolveIndirection(ctx: Ctx): void {
   const artifacts = discoverGeneratedArtifacts(ctx.rootAbs, ctx.config);
   registerArtifacts(ctx, artifacts, index);
   const recovered = registerArtifactOnlyRpcs(ctx, artifacts, index);
+  const impls = linkServerImpls(ctx, index);
 
   let linked = 0;
   for (const ev of ctx.rpcCalls) {
@@ -354,6 +415,12 @@ export function resolveIndirection(ctx: Ctx): void {
   }
   if (linked > 0) {
     ctx.builder.warn(`間接層を越えた RPC 呼び出しを ${linked} 件接続しました`);
+  }
+  if (impls > 0) {
+    ctx.builder.warn(
+      `生成クライアント経由の構成で、サーバ実装を ${impls} 件 RPC に接続しました` +
+        `(Unimplemented<Service>Server の埋め込みを証拠に同定)`,
+    );
   }
   if (relays > 0) {
     ctx.builder.warn(

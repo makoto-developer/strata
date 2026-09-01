@@ -11,7 +11,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Config } from './context.ts';
+import { isExcluded, type Config } from './context.ts';
 import { matchesAnyGlob } from './path-glob.ts';
 
 /** 巨大な生成物を丸ごと読まないための上限(署名はファイル先頭側に集中する)。 */
@@ -72,18 +72,6 @@ export function artifactNodeId(dir: string): string {
   return 'artifact:' + dir;
 }
 
-/** rel が config.exclude に該当するか(scan.ts の isExcluded と同じ意味論)。 */
-function isExcluded(rel: string, config: Config): boolean {
-  for (const pattern of config.exclude ?? []) {
-    if (pattern.includes('/')) {
-      if (rel === pattern || rel.startsWith(pattern + '/')) return true;
-    } else if (rel.split('/').includes(pattern)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function readHead(abs: string): string | undefined {
   try {
     const stat = fs.statSync(abs);
@@ -117,7 +105,7 @@ function collectCandidates(rootAbs: string, config: Config): string[] {
     }
     for (const entry of entries) {
       const childRel = rel === '' ? entry.name : rel + '/' + entry.name;
-      if (isExcluded(childRel, config)) continue;
+      if (isExcluded(childRel, config, entry.isDirectory())) continue;
       if (entry.isDirectory()) {
         if (SKIP.has(entry.name) && !forced.has(entry.name)) continue;
         visit(path.join(dirAbs, entry.name), childRel);
