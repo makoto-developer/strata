@@ -267,7 +267,7 @@ record('図: SVG 描画', svgBoxes > 0, `${svgBoxes} 要素`);
     return { bands, bandHit, langBars, before, dim, apiOnly, restored: document.querySelectorAll('#dg-svg .dg-node').length,
       hasQ: !!document.querySelector('#dg-q'), hasHop: !!document.querySelector('#dg-hop') };
   });
-  record('図: 帯が「被依存の深さ」', ui.bands.every((t) => t === '独立' || /^被依存の深さ \d+$/.test(t)), ui.bands.join(' / '));
+  record('図: 帯が「依存の深さ」', ui.bands.every((t) => t === '独立' || /^依存の深さ \d+$/.test(t)), ui.bands.join(' / '));
   record('図: 帯のラベルが箱と重ならない', ui.bandHit.length === 0, ui.bandHit.join(' / '));
   record('図: 言語の色帯が塗られる', ui.langBars > 0, `${ui.langBars} 個`);
   record('図: 絞り込み UI がある', ui.hasQ && ui.hasHop, '');
