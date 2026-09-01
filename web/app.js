@@ -2743,40 +2743,70 @@
     const HGAP = 26;
     const PADX = 90;
     const PADY = 34;
+    const LINEGAP = 26; // 同じ層を折り返したときの段の間隔
     const widthOf = (id) => Math.max(128, labelOf(id).length * 8.5 + 44);
+    // 1 行に並べきると 100 リポジトリで 15,000px を超える。画面幅で段に折り返す
+    const maxRowW = Math.min(2600, Math.max(1100, diagramViewEl.clientWidth || document.body.clientWidth || 1600));
     const pos = new Map(); // id -> {x, y, w}
-    function layoutRow(row, ri) {
+    const rowOf = new Map(); // id -> 層のインデックス(線の向きの判定に使う。折り返しで y が変わるため)
+    // 層を段に折り返して配置し、最後の段の中心 y を返す
+    function layoutRow(row, topY) {
+      const lines = [];
+      let cur = [];
       let x = PADX;
-      const y = PADY + ri * (BOXH + VGAP);
       for (const id of row.ids) {
         const w = widthOf(id);
-        pos.set(id, { x: x + w / 2, y, w });
+        if (cur.length > 0 && x + w > maxRowW) {
+          lines.push(cur);
+          cur = [];
+          x = PADX;
+        }
+        cur.push(id);
         x += w + HGAP;
       }
+      if (cur.length > 0) lines.push(cur);
+      lines.forEach((ids, li) => {
+        let lx = PADX;
+        const y = topY + li * (BOXH + LINEGAP);
+        for (const id of ids) {
+          const w = widthOf(id);
+          pos.set(id, { x: lx + w / 2, y, w });
+          lx += w + HGAP;
+        }
+      });
+      row.lines = lines;
+      return topY + (lines.length - 1) * (BOXH + LINEGAP);
     }
     // 上の行から順に配置し、barycenter(既配置の隣接ノードの平均 x)で並べ替えて交差を減らす
-    layoutRow(rows[0], 0);
-    for (let ri = 1; ri < rows.length; ri++) {
+    let cursorY = PADY;
+    for (let ri = 0; ri < rows.length; ri++) {
       const row = rows[ri];
-      const score = new Map();
-      for (const id of row.ids) {
-        const neigh = [];
-        for (const e of edges) {
-          if (e.from === id && pos.has(e.to)) neigh.push(pos.get(e.to).x);
-          if (e.to === id && pos.has(e.from)) neigh.push(pos.get(e.from).x);
+      for (const id of row.ids) rowOf.set(id, ri);
+      if (ri > 0) {
+        const score = new Map();
+        for (const id of row.ids) {
+          const neigh = [];
+          for (const e of edges) {
+            if (e.from === id && pos.has(e.to)) neigh.push(pos.get(e.to).x);
+            if (e.to === id && pos.has(e.from)) neigh.push(pos.get(e.from).x);
+          }
+          score.set(id, neigh.length > 0 ? neigh.reduce((a, b) => a + b, 0) / neigh.length : Infinity);
         }
-        score.set(id, neigh.length > 0 ? neigh.reduce((a, b) => a + b, 0) / neigh.length : Infinity);
+        row.ids.sort((a, b) => (score.get(a) ?? 0) - (score.get(b) ?? 0) || labelOf(a).localeCompare(labelOf(b)));
       }
-      row.ids.sort((a, b) => (score.get(a) ?? 0) - (score.get(b) ?? 0) || labelOf(a).localeCompare(labelOf(b)));
-      layoutRow(row, ri);
+      row.top = cursorY;
+      row.bottom = layoutRow(row, cursorY);
+      cursorY = row.bottom + BOXH + VGAP;
     }
     const totalW = Math.max(...[...pos.values()].map((p) => p.x + p.w / 2)) + PADX;
-    const totalH = PADY + rows.length * (BOXH + VGAP) - VGAP / 2 + PADY;
-    // 各行を中央寄せ
+    const totalH = cursorY - VGAP + PADY;
+    // 段ごとに中央寄せ(行ではなく段。折り返した最後の段が左に寄ったままにならないように)
     rows.forEach((row) => {
-      const right = Math.max(...row.ids.map((id) => pos.get(id).x + pos.get(id).w / 2));
-      const offset = (totalW - PADX - right) / 2;
-      for (const id of row.ids) pos.get(id).x += offset;
+      for (const ids of row.lines) {
+        const right = Math.max(...ids.map((id) => pos.get(id).x + pos.get(id).w / 2));
+        const offset = (totalW - PADX - right) / 2;
+        for (const id of ids) pos.get(id).x += offset;
+      }
     });
 
     const svg = [];
@@ -2786,8 +2816,9 @@
     );
     // レイヤー帯
     rows.forEach((row, ri) => {
-      const y = PADY + ri * (BOXH + VGAP) - 18;
-      svg.push(`<rect x="8" y="${y}" width="${totalW - 16}" height="${BOXH + 44}" rx="12" class="dg-band${ri % 2 === 1 ? ' alt' : ''}"/>`);
+      const y = row.top - 18;
+      const h = row.bottom - row.top + BOXH + 44;
+      svg.push(`<rect x="8" y="${y}" width="${totalW - 16}" height="${h}" rx="12" class="dg-band${ri % 2 === 1 ? ' alt' : ''}"/>`);
       const tag = row.level === null ? '独立' : `層 ${row.level}`;
       svg.push(`<text x="20" y="${y + 24}" class="dg-lvl">${esc(tag)}</text>`);
     });
@@ -2796,13 +2827,12 @@
       const a = pos.get(e.from);
       const b = pos.get(e.to);
       if (!a || !b) continue;
-      const up = b.y < a.y;
-      const sameRow = b.y === a.y;
+      const up = rowOf.get(e.to) < rowOf.get(e.from);
       let d;
-      if (sameRow) {
+      if (a.y === b.y) {
         const midY = a.y - 46;
         d = `M ${a.x} ${a.y - BOXH / 2} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y - BOXH / 2}`;
-      } else if (!up) {
+      } else if (b.y > a.y) {
         d = `M ${a.x} ${a.y + BOXH / 2} C ${a.x} ${a.y + BOXH / 2 + 44}, ${b.x} ${b.y - BOXH / 2 - 44}, ${b.x} ${b.y - BOXH / 2}`;
       } else {
         d = `M ${a.x} ${a.y - BOXH / 2} C ${a.x} ${a.y - BOXH / 2 - 44}, ${b.x} ${b.y + BOXH / 2 + 44}, ${b.x} ${b.y + BOXH / 2}`;
@@ -2823,9 +2853,9 @@
         e.http > 0 ? '⇄' + e.http : '',
         e.gql > 0 ? '◈' + e.gql : '',
       ].filter(Boolean).join(' ');
+      const mx = a.x + (b.x - a.x) * 0.45;
+      const my = a.y === b.y ? a.y - 50 : a.y + (b.y - a.y) * 0.45 + (up ? 8 : 0);
       if (boundaryLabel) {
-        const mx = a.x + (b.x - a.x) * 0.45;
-        const my = sameRow ? a.y - 50 : a.y + (b.y - a.y) * 0.45 + (up ? 8 : 0);
         svg.push(`<text x="${mx}" y="${my}" class="dg-elabel${up ? ' up' : ''}" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${boundaryLabel}</text>`);
       }
     }
@@ -2849,12 +2879,192 @@
           `</g>`,
       );
     }
+    dgExtent = { w: totalW, h: totalH };
+    dgLayoutWidth = maxRowW;
+    dgView = null; // 再描画したら表示位置は全体に戻す
     diagramViewEl.innerHTML =
-      `<div class="dg-hint">クリック = 詳細パネル(依存・公開API・経路探索) ・ ホバー = 関連する線を強調 ・ 上向きの<b class="dg-up-word">ローズの線</b> = レイヤー違反</div>` +
-      `<div class="dg-scroll"><svg id="dg-svg" xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">${svg.join('')}</svg></div>`;
+      `<div class="dg-hint">` +
+        `<span>クリック = 詳細パネル(依存・公開API・経路探索) ・ ホバー = 関連する線を強調 ・ 上向きの<b class="dg-up-word">ローズの線</b> = レイヤー違反</span>` +
+        `<span class="dg-tools">⌘/Ctrl + ホイールかキーボード(← ↑ → ↓ / + − 0)` +
+          `<button id="dg-out" class="dg-fit" title="縮小">−</button>` +
+          `<button id="dg-in" class="dg-fit" title="拡大">＋</button>` +
+          `<button id="dg-fit" class="dg-fit">全体を表示</button></span>` +
+      `</div>` +
+      `<div class="dg-scroll"><svg id="dg-svg" xmlns="http://www.w3.org/2000/svg" tabindex="0" role="group" aria-label="アーキテクチャ図(矢印キーで移動、+ − で拡大縮小、0 で全体表示)" preserveAspectRatio="xMidYMid meet" viewBox="0 0 ${totalW} ${totalH}">${svg.join('')}</svg></div>`;
+    dgApplyView();
+    dgHideOverlappingLabels();
   }
 
+  /**
+   * 重なる境界ラベルを隠す。密なグラフでは字が潰れて読めない塊になるため。
+   * 幅を見積もると記号の描画差で外すので、描画後の実測(getBBox)で判定する。
+   * 隠しても件数は線の <title> とホバー時の強調で辿れる。
+   */
+  function dgHideOverlappingLabels() {
+    const svgEl = diagramViewEl.querySelector('#dg-svg');
+    if (!svgEl) return;
+    const placed = [];
+    for (const el of svgEl.querySelectorAll('.dg-elabel')) {
+      if (typeof el.getBBox !== 'function') return;
+      const b = el.getBBox();
+      if (b.width === 0) continue;
+      const right = b.x + b.width;
+      const bottom = b.y + b.height;
+      if (placed.some((p) => b.x < p.x + p.w && p.x < right && b.y < p.y + p.h && p.y < bottom)) {
+        el.classList.add('hidden');
+      } else {
+        placed.push({ x: b.x, y: b.y, w: b.width, h: b.height });
+      }
+    }
+  }
+
+  // 図の表示範囲(viewBox)。null = 全体表示。再描画のたびに作り直すので描画側には持たせない
+  let dgExtent = { w: 1, h: 1 };
+  let dgView = null;
+  let dgLayoutWidth = 0; // 折り返しに使った幅。リサイズで組み直すかの判断に使う
+
+  /** 全体表示のときの viewBox。内容が画面より小さければ等倍にする(引き伸ばして文字を太らせない)。 */
+  function dgBaseView(svgEl) {
+    const r = svgEl.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0 && dgExtent.w <= r.width && dgExtent.h <= r.height) {
+      return { x: -(r.width - dgExtent.w) / 2, y: -(r.height - dgExtent.h) / 2, w: r.width, h: r.height };
+    }
+    return { x: 0, y: 0, w: dgExtent.w, h: dgExtent.h };
+  }
+
+  function dgApplyView() {
+    const svgEl = diagramViewEl.querySelector('#dg-svg');
+    if (!svgEl) return;
+    const v = dgView ?? dgBaseView(svgEl);
+    svgEl.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+    svgEl.classList.toggle('zoomed', dgView !== null);
+  }
+
+  let dgResizeTimer = null;
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('resize', () => {
+      if (state.tab !== 'diagram') return;
+      clearTimeout(dgResizeTimer);
+      dgResizeTimer = setTimeout(() => {
+        // 折り返し幅が変わるほど広がった/狭まったときだけ組み直す(拡大中の位置を無駄に捨てない)
+        const w = Math.min(2600, Math.max(1100, diagramViewEl.clientWidth || 1600));
+        if (Math.abs(w - dgLayoutWidth) > 80) renderDiagram();
+        else if (dgView === null) dgApplyView();
+      }, 150);
+    });
+  }
+
+  /** 画面上の 1px が viewBox 何単位か。preserveAspectRatio="meet" なので長辺側の比が効く。 */
+  function dgUnitsPerPixel(svgEl, v) {
+    const r = svgEl.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return 1;
+    return Math.max(v.w / r.width, v.h / r.height);
+  }
+
+  /** 画面座標(省略時は中央)を固定して拡大縮小する。scale < 1 で寄る。 */
+  function dgZoomAt(scale, clientX, clientY) {
+    const svgEl = diagramViewEl.querySelector('#dg-svg');
+    if (!svgEl) return;
+    const base = dgBaseView(svgEl);
+    const v = dgView ?? base;
+    // 全体より広げない・40 倍より寄らない
+    const nw = Math.min(base.w, Math.max(base.w / 40, v.w * scale));
+    const nh = (v.h / v.w) * nw;
+    const r = svgEl.getBoundingClientRect();
+    const u = dgUnitsPerPixel(svgEl, v);
+    // 余白(letterbox)を除いた描画領域の左上を求め、その点を固定して寄る
+    const cx = clientX === undefined ? r.left + r.width / 2 : clientX;
+    const cy = clientY === undefined ? r.top + r.height / 2 : clientY;
+    const ax = v.x + (cx - (r.left + (r.width - v.w / u) / 2)) * u;
+    const ay = v.y + (cy - (r.top + (r.height - v.h / u) / 2)) * u;
+    dgView = { x: ax - (ax - v.x) * (nw / v.w), y: ay - (ay - v.y) * (nh / v.h), w: nw, h: nh };
+    if (dgView.w >= base.w) dgView = null;
+    dgApplyView();
+  }
+
+  /** 表示範囲の割合で移動する(キーボード用)。全体表示のときは動かさない。 */
+  function dgPan(dx, dy) {
+    if (dgView === null) return;
+    dgView = { ...dgView, x: dgView.x + dgView.w * dx, y: dgView.y + dgView.h * dy };
+    dgApplyView();
+  }
+
+  diagramViewEl.addEventListener(
+    'wheel',
+    (ev) => {
+      // 素のホイールはページのスクロールに残す(図の中に閉じ込めない)
+      if (!ev.ctrlKey && !ev.metaKey) return;
+      const svgEl = diagramViewEl.querySelector('#dg-svg');
+      if (!svgEl || !svgEl.contains(ev.target)) return;
+      ev.preventDefault();
+      dgZoomAt(Math.exp(ev.deltaY * 0.002), ev.clientX, ev.clientY);
+    },
+    { passive: false },
+  );
+
+  // ホイールもドラッグも使えない環境向け。SVG は tabindex で focus できる
+  diagramViewEl.addEventListener('keydown', (ev) => {
+    const svgEl = diagramViewEl.querySelector('#dg-svg');
+    if (!svgEl || ev.target !== svgEl) return;
+    const STEP = 0.15;
+    if (ev.key === 'ArrowLeft') dgPan(-STEP, 0);
+    else if (ev.key === 'ArrowRight') dgPan(STEP, 0);
+    else if (ev.key === 'ArrowUp') dgPan(0, -STEP);
+    else if (ev.key === 'ArrowDown') dgPan(0, STEP);
+    else if (ev.key === '+' || ev.key === '=') dgZoomAt(0.8);
+    else if (ev.key === '-' || ev.key === '_') dgZoomAt(1.25);
+    else if (ev.key === '0') { dgView = null; dgApplyView(); }
+    else return;
+    ev.preventDefault();
+  });
+
+  let dgDrag = null;
+  function dgEndDrag() {
+    const svgEl = diagramViewEl.querySelector('#dg-svg');
+    if (svgEl) {
+      svgEl.classList.remove('panning');
+      if (dgDrag && typeof svgEl.releasePointerCapture === 'function') {
+        try {
+          svgEl.releasePointerCapture(dgDrag.id);
+        } catch {
+          // すでに解放済み(pointercancel 後など)
+        }
+      }
+    }
+    dgDrag = null;
+  }
+  diagramViewEl.addEventListener('pointerdown', (ev) => {
+    const svgEl = diagramViewEl.querySelector('#dg-svg');
+    if (!svgEl || !svgEl.contains(ev.target) || ev.button !== 0) return;
+    if (ev.target.closest && ev.target.closest('[data-node]')) return; // ノードの選択を邪魔しない
+    const v = dgView ?? dgBaseView(svgEl);
+    dgDrag = { id: ev.pointerId, cx: ev.clientX, cy: ev.clientY, vx: v.x, vy: v.y, u: dgUnitsPerPixel(svgEl, v), w: v.w, h: v.h };
+    // 図の外へ出ても掴んだままにする(枠で切れると大きく動かせない)
+    if (typeof svgEl.setPointerCapture === 'function') svgEl.setPointerCapture(ev.pointerId);
+    svgEl.classList.add('panning');
+  });
+  diagramViewEl.addEventListener('pointermove', (ev) => {
+    if (!dgDrag) return;
+    if (ev.buttons === 0) return dgEndDrag(); // pointerup を取りこぼした場合の自己回復
+    dgView = {
+      x: dgDrag.vx - (ev.clientX - dgDrag.cx) * dgDrag.u,
+      y: dgDrag.vy - (ev.clientY - dgDrag.cy) * dgDrag.u,
+      w: dgDrag.w,
+      h: dgDrag.h,
+    };
+    dgApplyView();
+  });
+  for (const type of ['pointerup', 'pointercancel']) diagramViewEl.addEventListener(type, dgEndDrag);
+  if (typeof window.addEventListener === 'function') window.addEventListener('blur', dgEndDrag);
+
   diagramViewEl.addEventListener('click', (ev) => {
+    if (ev.target.id === 'dg-fit') {
+      dgView = null;
+      dgApplyView();
+      return;
+    }
+    if (ev.target.id === 'dg-in') return dgZoomAt(0.8);
+    if (ev.target.id === 'dg-out') return dgZoomAt(1.25);
     const g = ev.target.closest && ev.target.closest('[data-node]');
     if (!g) return;
     const id = g.dataset.node;
