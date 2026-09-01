@@ -37,6 +37,10 @@ class El {
   }
   fire(type, ev) { for (const fn of this.handlers.get(type) || []) fn(ev); }
   setAttribute(k, v) { this.attrs[k] = v; }
+  getAttribute(k) { return this.attrs[k] ?? null; }
+  // 図タブが表示範囲(viewBox)を決めるのに使う。ヘッドレスなので固定の箱を返す
+  getBoundingClientRect() { return { left: 0, top: 0, width: 1200, height: 700 }; }
+  contains() { return true; }
   querySelector() { return new El('(sub)'); }
   querySelectorAll() { return []; }
   scrollIntoView() {}

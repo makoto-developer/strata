@@ -195,6 +195,65 @@ await page.waitForTimeout(900);
 const svgBoxes = await page.$$eval('#diagramview svg *', (e) => e.length).catch(() => 0);
 record('図: SVG 描画', svgBoxes > 0, `${svgBoxes} 要素`);
 
+// 図は viewBox で表示範囲を決める。折り返し・ラベルの重なり・拡大縮小は
+// ソースを読んでも分からないので、実ブラウザで測る
+{
+  const geom = await page.evaluate(() => {
+    const svg = document.querySelector('#dg-svg');
+    if (!svg) return null;
+    const vb = svg.getAttribute('viewBox').split(' ').map(Number);
+    const boxes = [...svg.querySelectorAll('.dg-node rect')].map((r) => ({
+      x: +r.getAttribute('x'), y: +r.getAttribute('y'), w: +r.getAttribute('width'), h: +r.getAttribute('height'),
+    }));
+    const clipped = [...svg.querySelectorAll('.dg-node')].filter((g) => {
+      const rect = g.querySelector('rect');
+      const label = g.querySelector('.dg-label');
+      return rect && label && label.getComputedTextLength() > +rect.getAttribute('width') - 8;
+    }).length;
+    const ls = [...svg.querySelectorAll('.dg-elabel:not(.hidden)')].map((t) => t.getBBox());
+    let overlap = 0;
+    for (let i = 0; i < ls.length; i++) {
+      for (let j = i + 1; j < ls.length; j++) {
+        const a = ls[i];
+        const b = ls[j];
+        if (a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height) overlap++;
+      }
+    }
+    const r = svg.getBoundingClientRect();
+    return {
+      vb, overlap, clipped,
+      right: Math.max(...boxes.map((b) => b.x + b.w)), bottom: Math.max(...boxes.map((b) => b.y + b.h)),
+      scale: Math.min(r.width / vb[2], r.height / vb[3]),
+      bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  record('図: 箱が SVG に収まる', geom && geom.right <= geom.vb[2] && geom.bottom <= geom.vb[3],
+    geom ? `右 ${Math.round(geom.right)}/${geom.vb[2]} 下 ${Math.round(geom.bottom)}/${geom.vb[3]}` : 'SVG なし');
+  record('図: 横スクロールが出ない', geom && geom.bodyOverflow <= 1, geom ? `はみ出し ${geom.bodyOverflow}px` : '');
+  record('図: ラベルの文字切れなし', geom && geom.clipped === 0, geom ? `${geom.clipped} 件` : '');
+  record('図: 境界ラベルが重ならない', geom && geom.overlap === 0, geom ? `${geom.overlap} 組` : '');
+  record('図: 初期表示で拡大しない', geom && geom.scale <= 1.02, geom ? `倍率 ${geom.scale.toFixed(2)}` : '');
+
+  const zoom = await page.evaluate(() => {
+    const svg = document.querySelector('#dg-svg');
+    const vw = () => Number(svg.getAttribute('viewBox').split(' ')[2]);
+    const fit = vw();
+    document.querySelector('#dg-in').click();
+    const zin = vw();
+    document.querySelector('#dg-fit').click();
+    const back = vw();
+    svg.focus();
+    svg.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true, cancelable: true }));
+    const bykey = vw();
+    svg.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true, cancelable: true }));
+    return { fit, zin, back, bykey, reset: vw(), focusable: svg.getAttribute('tabindex') === '0' };
+  });
+  record('図: ＋ボタンで拡大', zoom.zin < zoom.fit, `${zoom.fit} → ${zoom.zin}`);
+  record('図: 全体を表示で戻る', zoom.back === zoom.fit, `${zoom.zin} → ${zoom.back}`);
+  record('図: キーボードで拡大縮小', zoom.focusable && zoom.bykey < zoom.fit && zoom.reset === zoom.fit,
+    `focusable=${zoom.focusable} + → ${zoom.bykey} / 0 → ${zoom.reset}`);
+}
+
 // ---------- エントリーポイント ----------
 await page.click('#tab-entries');
 await page.waitForTimeout(700);

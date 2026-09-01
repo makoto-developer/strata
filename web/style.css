@@ -687,10 +687,35 @@ body.tab-entries .searchwrap { display: none !important; }
 body.tab-diagram .structonly { display: none !important; }
 body.tab-diagram .searchwrap { display: none !important; }
 #diagramview { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#diagramview .dg-hint { padding: 8px 16px; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--line); }
+#diagramview .dg-hint {
+  padding: 8px 16px;
+  color: var(--muted);
+  font-size: 11px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+#diagramview .dg-tools { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+#diagramview .dg-fit {
+  font: inherit;
+  color: var(--fg);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+#diagramview .dg-fit:hover { border-color: var(--accent); color: var(--accent); }
 #diagramview .dg-up-word { color: var(--up); }
-#diagramview .dg-scroll { flex: 1; overflow: auto; }
-#dg-svg { display: block; margin: 0 auto; }
+/* 実寸で吐かず viewBox で拡大縮小するので、はみ出しはスクロールでなくズームで見る */
+#diagramview .dg-scroll { flex: 1; overflow: hidden; min-height: 0; }
+#dg-svg { display: block; width: 100%; height: 100%; touch-action: none; }
+#dg-svg.zoomed { cursor: grab; }
+#dg-svg:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#dg-svg.panning { cursor: grabbing; }
 #dg-svg .dg-band { fill: transparent; stroke: none; }
 #dg-svg .dg-band.alt { fill: var(--band); }
 #dg-svg .dg-lvl { fill: var(--faint); font-size: 10px; font-weight: 700; letter-spacing: .05em; }

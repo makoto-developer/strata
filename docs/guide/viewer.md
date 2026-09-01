@@ -62,6 +62,11 @@ proto の RPC・HTTP エンドポイント・GraphQL フィールドを 1 つの
 ⚡RPC / ⇄HTTP / ◈GraphQL の内訳で表示します。外部システムは破線の箱です。
 箱をクリックすると、そのサービスの依存元・依存先・公開 API が右パネルに出ます。
 
+サービスが多い層は画面幅で段に折り返します。全体が入りきらないときは
+**⌘/Ctrl + ホイールで拡大・ドラッグで移動**し、「全体を表示」で戻ります。
+ヘッダーの ＋ / − ボタンでも拡大縮小でき、図をクリックしてフォーカスすれば
+矢印キーで移動・`+` `-` で拡大縮小・`0` で全体表示に戻せます。
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="{{ site.baseurl }}/assets/shots/diagram-dark.png">
   <img alt="図タブ" src="{{ site.baseurl }}/assets/shots/diagram-light.png">
