@@ -160,7 +160,7 @@ strata trace  [dir|model.json] <関数ID> [--up]   # 端末上でコールツリ
     { "name": "user-service", "path": "services/user" },
     { "name": "web", "path": "frontend" }
   ],
-  "exclude": ["experimental"],      // パス前方一致 or ディレクトリ名(完全に無視)
+  "exclude": ["experimental"],      // パス前方一致 / ディレクトリ名 / グロブ(完全に無視)
   "includeTests": false,
   "testPaths": ["tools/test-client"] // テスト扱いにする追加パス(§6.7 の集計のみに使う)
 }

@@ -20,6 +20,21 @@ const rpcEdges = (model) => model.edges.filter((e) => e.kind === 'rpc');
 const hasRpc = (model, from, to) => rpcEdges(model).some((e) => e.from === from && e.to.endsWith(to));
 const unresolvedOf = (model, detail) => (model.unresolved ?? []).filter((u) => u.detail === detail);
 
+/** fixture を一時ディレクトリへ複製し、strata.config.json を書き換えてから解析する。 */
+function scanWith(dir, mutate) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-pattern-'));
+  fs.cpSync(dir, tmp, { recursive: true });
+  const configFile = path.join(tmp, 'strata.config.json');
+  const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+  mutate(config);
+  fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+  try {
+    return scan(tmp);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 /** fixture を一時ディレクトリへ複製し、strata.config.json から指定キー(a.b 形式)を外して解析する。 */
 function scanWithout(dir, key) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-pattern-'));
@@ -73,6 +88,55 @@ function scanWithout(dir, key) {
   if (!hasRpc(off, 'app', 'CatalogService.GetItem') && (off.unresolved ?? []).length === 0)
     ok('vendor 取り込み: indirection を外すと接続も未解決も出ない(opt-in)');
   else fail('vendor 取り込み: opt-in が効いていない');
+}
+
+// --- パターン B2: proto も生成クライアントも別リポジトリ。実装側と呼び出し側が別リポジトリに分かれる ---
+{
+  const dir = path.join(patternsDir, 'generated-server');
+  const model = scan(dir);
+
+  // 実装側は「解決済みの proto」を import しないので、間接層側で繋ぎ直す必要がある
+  if (model.edges.some((e) => e.kind === 'impl' && e.to === 'svc-a/src#FooServer.GetFoo'))
+    ok('生成クライアント: サーバ実装が impl で繋がる');
+  else fail('生成クライアント: サーバ実装が繋がらない(呼び出しの矢印が共有 proto に溜まる)');
+
+  if (hasRpc(model, 'svc-b', 'FooService.GetFoo')) ok('生成クライアント: 呼び出し側が繋がる');
+  else fail('生成クライアント: 呼び出し側が繋がらない');
+
+  // 生成物ノードは置き場所の下に入れる(トップレベルに置くとパッケージ数だけ図の箱が増える)
+  const artifact = model.nodes.find((n) => n.kind === 'artifact');
+  if (artifact?.parent === 'client-lib/foo') ok('生成クライアント: 生成物が置き場所の下に入る');
+  else fail('生成クライアント: 生成物がトップレベルに出ている');
+
+  // 入れ子モジュールはリポジトリ名でまとまり、名前は go.mod の module から取る
+  const svcA = model.nodes.find((n) => n.id === 'svc-a/src');
+  if (svcA?.parent === 'svc-a' && svcA.label === 'svc-a')
+    ok('生成クライアント: 入れ子モジュールがリポジトリ名の下に入り、go.mod の名前を使う');
+  else fail('生成クライアント: 入れ子モジュールの親か名前が期待どおりでない');
+
+  // 1 つの型が複数 service を実装する(Unimplemented... の埋め込みが複数)
+  if (model.edges.some((e) => e.kind === 'impl' && e.to === 'svc-a/src#FooServer.Ping'))
+    ok('生成クライアント: 型に埋め込まれた 2 つ目の service も繋ぐ');
+  else fail('生成クライアント: 2 つ目の埋め込みを取りこぼしている');
+
+  // 同じ contract の実装が複数あっても、先に繋がった 1 件で打ち切らない
+  const getFoo = model.edges.filter((e) => e.kind === 'impl' && e.from.endsWith('FooService.GetFoo'));
+  if (getFoo.length === 2 && getFoo.some((e) => e.to === 'svc-c#AltFooServer.GetFoo'))
+    ok('生成クライアント: 同じ RPC の実装が複数あっても全部繋ぐ');
+  else fail('生成クライアント: 2 つ目の実装が繋がっていない');
+
+  const off = scanWithout(dir, 'indirection');
+  if (!off.edges.some((e) => e.kind === 'impl') && !hasRpc(off, 'svc-b', 'FooService.GetFoo'))
+    ok('生成クライアント: indirection を外すと実装も呼び出しも繋がらない(opt-in)');
+  else fail('生成クライアント: opt-in が効いていない');
+
+  // exclude のグロブは生成物の走査にも効く(走査系ごとに実装が分かれていると漏れる)
+  const excluded = scanWith(dir, (config) => {
+    config.exclude = ['**/client-lib/**'];
+  });
+  if (!excluded.nodes.some((n) => n.kind === 'artifact'))
+    ok('生成クライアント: exclude のグロブが生成物の走査にも効く');
+  else fail('生成クライアント: 除外したはずの場所から生成物を拾っている');
 }
 
 // --- パターン C: 同じ proto を Go 実装 / TS 呼び出し / Python 呼び出しが囲む ---

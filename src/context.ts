@@ -1,10 +1,11 @@
 // 解析器間で共有する型・コンテキスト・ユーティリティ(docs/SPEC.md §5.1/§7)。
 //
 // scan.ts(オーケストレータ)と各 analyzers が双方向に依存する循環を避けるため、
-// 両者が必要とする共有物はここに置く。依存は model.ts のみ(下向き)。
+// 両者が必要とする共有物はここに置く。依存は model.ts / path-glob.ts のみ(下向き)。
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { matchesAnyGlob } from './path-glob.ts';
 import type { Builder, ForbiddenRule, Thresholds, UnresolvedRef } from './model.ts';
 
 export interface ServiceConf {
@@ -141,6 +142,7 @@ export interface Ctx {
   goPkgRelIndex: Map<string, Array<{ pkgId: string; project: string }>>; // モジュール相対パス → パッケージ
   goModulePrefixes: Set<string>; // 例 "github.com/makoto-developer"(内部っぽい未解決 import の警告用)
   goPkgImplServices: Map<string, Set<string>>; // pkgId -> Unimplemented<Service>Server を埋め込む service 名
+  goImplTypeServices: Map<string, Set<string>>; // "pkgId#Type" -> その型が実装する service 名(複数埋め込みもある)
   // proto
   protoGoPackage: Map<string, string>; // go_package -> proto node id
   protoGoPackageSuffix: Map<string, string | null>; // protoパッケージ名由来のパスサフィックス -> proto node id(null = 曖昧)
@@ -186,6 +188,26 @@ function serviceFor(rel: string, config: Config): ServiceConf | undefined {
     }
   }
   return best;
+}
+
+/**
+ * rel が config.exclude に該当するか。走査する側すべてがこれを使う
+ * (実装が分かれていると、除外したはずの場所から生成物だけ拾われる)。
+ */
+export function isExcluded(rel: string, config: Config, isDir = false): boolean {
+  for (const pattern of config.exclude ?? []) {
+    if (pattern.includes('*')) {
+      if (matchesAnyGlob(rel, [pattern])) return true;
+      // "**/x/**" は x 配下のファイルにしか当たらないので、枝ごと切るために x 自身とも照合する
+      const trimmed = isDir ? pattern.replace(/\/\*\*?$/, '') : pattern;
+      if (trimmed !== pattern && matchesAnyGlob(rel, [trimmed])) return true;
+    } else if (pattern.includes('/')) {
+      if (rel === pattern || rel.startsWith(pattern + '/')) return true;
+    } else if (rel.split('/').includes(pattern)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function svcNodeId(svc: ServiceConf): string {

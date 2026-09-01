@@ -396,7 +396,7 @@ I が高いほど「多くに依存し変更の影響を受けやすい」、低
     { "name": "gateway", "path": "gateway" },
     { "name": "user-service", "path": "services/user" }
   ],
-  "exclude": ["experimental"],        // 除外(パス前方一致 or ディレクトリ名)
+  "exclude": ["experimental", "**/e2e/**"], // 除外(パス前方一致 / ディレクトリ名 / グロブ)
   "includeTests": false,              // テストコードをグラフに含めるか(既定: false)
   "testPaths": ["tools/test-client"], // テスト扱いにする追加パス
 

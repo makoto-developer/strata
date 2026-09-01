@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Builder, type Graph } from './model.ts';
 import { stripSource } from './lex.ts';
-import { SKIP_DIRS, svcNodeId, serviceFor } from './context.ts';
+import { SKIP_DIRS, svcNodeId, serviceFor, isExcluded } from './context.ts';
 import type { ServiceConf, Config, Project, RpcInfo, Ctx } from './context.ts';
 // 後方互換: 共有物は context.ts へ移したが、従来 scan.ts から import していた
 // コード(server.ts など)向けに再公開する。
@@ -90,17 +90,6 @@ function loadConfig(rootAbs: string): Config {
   }
 }
 
-function isExcluded(rel: string, config: Config): boolean {
-  for (const pattern of config.exclude ?? []) {
-    if (pattern.includes('/')) {
-      if (rel === pattern || rel.startsWith(pattern + '/')) return true;
-    } else if (rel.split('/').includes(pattern)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 interface ProjectFlags {
   hasGo: boolean;
   hasJs: boolean;
@@ -143,7 +132,7 @@ function walk(rootAbs: string, config: Config): WalkResult {
       }
       if (isDir) {
         if (SKIP_DIRS.has(entry.name)) continue;
-        if (isExcluded(childRel, config)) continue;
+        if (isExcluded(childRel, config, true)) continue;
         visit(path.join(dirAbs, entry.name), childRel);
       } else if (entry.isFile()) {
         if (isExcluded(childRel, config)) continue;
@@ -186,6 +175,41 @@ function readJsonSafe(file: string): Record<string, unknown> | undefined {
   }
 }
 
+function readTextSafe(file: string): string | undefined {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * マニフェストが宣言しているモジュール名。ディレクトリ名(basename)より正確なので優先する。
+ * `<repo>/src` のような入れ子モジュールが全部 "src" になるのを避ける。
+ */
+function manifestName(dirAbs: string, flags: ProjectFlags): string | undefined {
+  if (flags.hasJs) {
+    const pkg = readJsonSafe(path.join(dirAbs, 'package.json'));
+    if (pkg && typeof pkg.name === 'string' && pkg.name !== '') return pkg.name;
+  }
+  if (flags.hasGo) {
+    const m = readTextSafe(path.join(dirAbs, 'go.mod'))?.match(/^\s*module\s+(\S+)/m);
+    const segs = m ? m[1].replace(/\/+$/, '').split('/') : [];
+    // 末尾がメジャー版区画なら 1 つ手前が通称。v0/v1 に接尾辞は付かない規約なので v2 以上だけ落とす
+    if (segs.length > 1 && /^v[1-9]\d*$/.test(segs[segs.length - 1]) && segs[segs.length - 1] !== 'v1') segs.pop();
+    if (segs.length > 0 && segs[segs.length - 1] !== '') return segs[segs.length - 1];
+  }
+  if (flags.hasEx) {
+    const m = readTextSafe(path.join(dirAbs, 'mix.exs'))?.match(/\bapp:\s*:([A-Za-z_]\w*)/);
+    if (m) return m[1];
+  }
+  if (flags.hasPy) {
+    const m = readTextSafe(path.join(dirAbs, 'pyproject.toml'))?.match(/^\s*\[project\][^[]*?^\s*name\s*=\s*["\']([^"\']+)["\']/ms);
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
 /** サービス設定のうち rel を含む最長一致のものを返す。 */
 export function discover(rootAbs: string): { config: Config; projects: Project[]; builder: Builder; wsName: string } {
   const config = loadConfig(rootAbs);
@@ -194,11 +218,9 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
   const rootsSorted = [...projectRoots.keys()].sort((a, b) => b.length - a.length);
   const projects = new Map<string, Project>();
   for (const [rel, flags] of projectRoots) {
-    let name = rel === '' ? path.basename(rootAbs) : path.posix.basename(rel);
-    if (flags.hasJs) {
-      const pkg = readJsonSafe(path.join(rootAbs, rel, 'package.json'));
-      if (pkg && typeof pkg.name === 'string' && pkg.name !== '') name = pkg.name;
-    }
+    const name =
+      manifestName(path.join(rootAbs, rel), flags) ??
+      (rel === '' ? path.basename(rootAbs) : path.posix.basename(rel));
     projects.set(rel, {
       rootRel: rel,
       nodeId: rel === '' ? '.' : rel,
@@ -254,19 +276,42 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
   }
   // プロジェクト(モジュール)ノード
   const projectList = [...projects.values()].sort((a, b) => (a.rootRel < b.rootRel ? -1 : 1));
-  for (const p of projectList) {
-    // テストコードしか含まないモジュールはグラフに出さない(テスト呼び出し検出には使う)
-    if (
+  // テストコードしか含まないモジュールはグラフに出さない(テスト呼び出し検出には使う)
+  const emitted = projectList.filter(
+    (p) =>
       p.goFiles.length + p.jsFiles.length + p.exFiles.length + p.pyFiles.length + p.gqlFiles.length +
-        p.protoFiles.length + p.genGrpcFiles.length ===
-      0
-    )
-      continue;
+        p.protoFiles.length + p.genGrpcFiles.length >
+      0,
+  );
+  const emittedRoots = new Set(emitted.map((p) => p.rootRel));
+  // ワークスペース直下に複数リポジトリを並べた構成でだけ、リポジトリ名のグループを暗黙に作る。
+  // ルート自体がプロジェクト(単一リポジトリ)なら従来どおり平坦に置く
+  const groupByRepo = !hasWsRootProject;
+  const parentOf = (p: Project): string | undefined => {
     const svc = p.rootRel === '' ? undefined : serviceFor(p.rootRel, config);
+    if (svc) return svcNodeId(svc);
+    // 入れ子モジュールは上位のモジュールルートにぶら下げる(ws ルート自身は親にしない)
+    for (let dir = path.posix.dirname(p.rootRel); dir !== '.' && dir !== ''; dir = path.posix.dirname(dir)) {
+      if (emittedRoots.has(dir)) return dir;
+    }
+    const repo = p.rootRel.split('/')[0];
+    return groupByRepo && repo !== '' && repo !== p.rootRel ? repo : undefined;
+  };
+
+  const parents = new Map(emitted.map((p) => [p.nodeId, parentOf(p)]));
+  // 実体のないグループ(マニフェストを持たないリポジトリルート)をノードとして立てる
+  const groups = new Set<string>();
+  for (const parent of parents.values()) {
+    if (parent !== undefined && !parent.startsWith('svc:') && !emittedRoots.has(parent)) groups.add(parent);
+  }
+  for (const g of [...groups].sort()) {
+    builder.addNode({ id: g, label: path.posix.basename(g), kind: 'dir' });
+  }
+  for (const p of emitted) {
     builder.addNode({
       id: p.nodeId,
       label: p.name,
-      parent: svc ? svcNodeId(svc) : undefined,
+      parent: parents.get(p.nodeId),
       kind: 'module',
       lang: p.hasGo ? 'go' : p.hasEx ? 'ex' : p.hasPy ? 'py' : 'ts',
     });
@@ -297,6 +342,7 @@ export function scan(rootDir: string): Graph {
     goPkgRelIndex: new Map(),
     goModulePrefixes: new Set(),
     goPkgImplServices: new Map(),
+    goImplTypeServices: new Map(),
     protoGoPackage: new Map(),
     protoGoPackageSuffix: new Map(),
     protoServiceNames: new Set(),
