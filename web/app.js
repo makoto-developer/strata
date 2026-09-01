@@ -2696,7 +2696,7 @@
         (hubCount > 0
           ? `<span class="dg-lg hub" title="入次数が ${DG_HUB_MIN} 以上のサービス。入ってくる線は畳んであり、ホバーか選択で開きます"><i></i>共有ハブ ${hubCount}</span>`
           : '') +
-        `<span class="dg-lg" title="Tarjan の強連結成分に潰したうえでの最長路の深さです。宣言されたアーキテクチャ層ではありません"><i class="none"></i>帯 = 被依存の深さ</span>` +
+        `<span class="dg-lg" title="そのサービスから下へ伸びる依存チェーンの長さ(強連結成分に潰したうえでの最長路)です。0 は何にも依存しない土台側。宣言されたアーキテクチャ層ではありません"><i class="none"></i>帯 = 依存の深さ</span>` +
       `</span>` +
       `<span class="dg-tools">` +
         `<input id="dg-q" class="dg-search" type="search" placeholder="サービス名で絞り込み" value="${esc(state.dgQ)}">` +
@@ -2824,7 +2824,7 @@
     const BOXH = 54;
     const VGAP = 96;
     const HGAP = 26;
-    const PADX = 112; // 帯のラベル(「被依存の深さ N」)より右から箱を置く
+    const PADX = 112; // 帯のラベル(「依存の深さ N」)より右から箱を置く
     const PADY = 34;
     const LINEGAP = 26; // 同じ層を折り返したときの段の間隔
     // 箱の副題。幅の計算に使うのでレイアウトの前に決める
@@ -2913,8 +2913,9 @@
       const y = row.top - 18;
       const h = row.bottom - row.top + BOXH + 44;
       svg.push(`<rect x="8" y="${y}" width="${totalW - 16}" height="${h}" rx="12" class="dg-band${ri % 2 === 1 ? ' alt' : ''}"/>`);
-      // 「層」ではない — 強連結成分に潰したうえでの最長路の深さ。宣言されたアーキテクチャ層と混同させない
-      const tag = row.level === null ? '独立' : `被依存の深さ ${row.level}`;
+      // 「層」ではない — そのサービスから下へ伸びる依存チェーンの長さ(SCC に潰したうえでの最長路)。
+      // 0 = 何にも依存しない土台側。宣言されたアーキテクチャ層と混同させない
+      const tag = row.level === null ? '独立' : `依存の深さ ${row.level}`;
       svg.push(`<text x="20" y="${y + 24}" class="dg-lvl">${esc(tag)}</text>`);
     });
     // エッジ
