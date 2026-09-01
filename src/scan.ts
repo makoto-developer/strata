@@ -304,8 +304,27 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
   for (const parent of parents.values()) {
     if (parent !== undefined && !parent.startsWith('svc:') && !emittedRoots.has(parent)) groups.add(parent);
   }
+  // 入れ子モジュールの親は「上位のモジュール」なので、グループまで親を辿って数える
+  const groupOf = (nodeId: string): string | undefined => {
+    let cur = parents.get(nodeId);
+    for (let guard = 0; cur !== undefined && guard < 100; guard++) {
+      if (groups.has(cur)) return cur;
+      cur = parents.get(cur);
+    }
+    return undefined;
+  };
   for (const g of [...groups].sort()) {
-    builder.addNode({ id: g, label: path.posix.basename(g), kind: 'dir' });
+    // 配下のモジュールで最も多い言語をグループの言語にする(ビューアが箱を言語で塗り分ける)
+    const tally = new Map<string, number>();
+    for (const p of emitted) {
+      if (groupOf(p.nodeId) !== g) continue;
+      const lang = p.hasGo ? 'go' : p.hasEx ? 'ex' : p.hasPy ? 'py' : 'ts';
+      tally.set(lang, (tally.get(lang) ?? 0) + 1);
+    }
+    let lang: string | undefined;
+    let best = 0;
+    for (const [k, n] of tally) if (n > best) ((best = n), (lang = k));
+    builder.addNode({ id: g, label: path.posix.basename(g), kind: 'dir', ...(lang ? { lang } : {}) });
   }
   for (const p of emitted) {
     builder.addNode({

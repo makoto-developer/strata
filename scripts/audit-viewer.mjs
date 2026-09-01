@@ -205,11 +205,16 @@ record('図: SVG 描画', svgBoxes > 0, `${svgBoxes} 要素`);
     const boxes = [...svg.querySelectorAll('.dg-node rect')].map((r) => ({
       x: +r.getAttribute('x'), y: +r.getAttribute('y'), w: +r.getAttribute('width'), h: +r.getAttribute('height'),
     }));
-    const clipped = [...svg.querySelectorAll('.dg-node')].filter((g) => {
+    // 見出しだけでなく副題(⚡RPC ・ loc ・ ⇠N 依存元)も箱に収まっているか見る
+    let clipped = 0;
+    for (const g of svg.querySelectorAll('.dg-node')) {
       const rect = g.querySelector('rect');
-      const label = g.querySelector('.dg-label');
-      return rect && label && label.getComputedTextLength() > +rect.getAttribute('width') - 8;
-    }).length;
+      if (!rect) continue;
+      const w = +rect.getAttribute('width');
+      for (const t of g.querySelectorAll('.dg-label, .dg-sub')) {
+        if (t.textContent && t.getComputedTextLength() > w - 8) clipped++;
+      }
+    }
     const ls = [...svg.querySelectorAll('.dg-elabel:not(.hidden)')].map((t) => t.getBBox());
     let overlap = 0;
     for (let i = 0; i < ls.length; i++) {
@@ -233,6 +238,42 @@ record('図: SVG 描画', svgBoxes > 0, `${svgBoxes} 要素`);
   record('図: ラベルの文字切れなし', geom && geom.clipped === 0, geom ? `${geom.clipped} 件` : '');
   record('図: 境界ラベルが重ならない', geom && geom.overlap === 0, geom ? `${geom.overlap} 組` : '');
   record('図: 初期表示で拡大しない', geom && geom.scale <= 1.02, geom ? `倍率 ${geom.scale.toFixed(2)}` : '');
+
+  const ui = await page.evaluate(() => {
+    const svg = document.querySelector('#dg-svg');
+    const boxes = [...svg.querySelectorAll('.dg-node > rect:first-of-type')].map((r) => ({
+      x: +r.getAttribute('x'), y: +r.getAttribute('y'), w: +r.getAttribute('width'), h: +r.getAttribute('height'),
+    }));
+    const bandHit = [...svg.querySelectorAll('.dg-lvl')].filter((t) => {
+      const b = t.getBBox();
+      return boxes.some((x) => b.x < x.x + x.w && x.x < b.x + b.width && b.y < x.y + x.h && x.y < b.y + b.height);
+    }).map((t) => t.textContent);
+    const bands = [...svg.querySelectorAll('.dg-lvl')].map((t) => t.textContent);
+    const langBars = [...svg.querySelectorAll('.dg-node .dg-langbar')].filter((r) => {
+      const f = getComputedStyle(r).fill;
+      return f && f !== 'none' && f !== 'rgba(0, 0, 0, 0)';
+    }).length;
+    const before = svg.querySelectorAll('.dg-node').length;
+    const input = document.querySelector('#dg-q');
+    const label = svg.querySelector('.dg-node .dg-label').textContent;
+    input.value = label.slice(0, Math.max(3, label.length - 1));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const dim = svg.querySelectorAll('.dg-node.dim').length;
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#dg-api').click();
+    const apiOnly = document.querySelectorAll('#dg-svg .dg-node').length;
+    document.querySelector('#dg-api').click();
+    return { bands, bandHit, langBars, before, dim, apiOnly, restored: document.querySelectorAll('#dg-svg .dg-node').length,
+      hasQ: !!document.querySelector('#dg-q'), hasHop: !!document.querySelector('#dg-hop') };
+  });
+  record('図: 帯が「被依存の深さ」', ui.bands.every((t) => t === '独立' || /^被依存の深さ \d+$/.test(t)), ui.bands.join(' / '));
+  record('図: 帯のラベルが箱と重ならない', ui.bandHit.length === 0, ui.bandHit.join(' / '));
+  record('図: 言語の色帯が塗られる', ui.langBars > 0, `${ui.langBars} 個`);
+  record('図: 絞り込み UI がある', ui.hasQ && ui.hasHop, '');
+  record('図: 検索で一致しない箱が減光', ui.dim > 0 && ui.dim < ui.before, `${ui.dim}/${ui.before}`);
+  record('図: 「API のみ」で絞れて戻せる', ui.apiOnly <= ui.before && ui.restored === ui.before,
+    `${ui.before} → ${ui.apiOnly} → ${ui.restored}`);
 
   const zoom = await page.evaluate(() => {
     const svg = document.querySelector('#dg-svg');

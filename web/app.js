@@ -374,6 +374,10 @@
     pathQuery: '', // 経路探索: 相手ノードの検索文字列
     pathTarget: null, // 経路探索: 相手ノード id
     structKinds: new Set(['import', 'call', 'boundary']), // 表示する依存線の種類
+    dgIsolated: false, // 図: 孤立ノード(どこにも繋がらないもの)を展開するか
+    dgApiOnly: false, // 図: 公開 API を持つものだけ表示するか
+    dgHop: false, // 図: 選択ノードから 1 ホップだけ表示するか
+    dgQ: '', // 図: 絞り込み文字列(一致しないものを減光する)
     tab: 'structure', // 'structure' | 'api'
     apiRpc: null, // API タブで選択中の RPC id
     apiSel: null, // フロー内で選択中のノード id(ソース表示対象)
@@ -822,6 +826,7 @@
         state.structHidden = new Set();
         persistHidden();
         render();
+        if (state.tab === 'diagram') renderDiagram(); // バッジは図タブでも押せる
       });
     const bmBadgeEl = statsEl.querySelector('.bm-badge');
     if (bmBadgeEl)
@@ -2674,13 +2679,105 @@
     return { tops, edges: [...edgeMap.values()] };
   }
 
+  // 入次数がこれ以上のノードは「共有ハブ」とみなし、入ってくる線を既定で畳む。
+  // 全員が依存する proto カタログに 30 本以上が集まると、画面の下半分が線の壁になる
+  const DG_HUB_MIN = 12;
+
+  const DG_LANGS = [['go', 'Go'], ['ts', 'TS / JS'], ['py', 'Python'], ['ex', 'Elixir']];
+
+  /** 図タブのヘッダー(凡例 + 絞り込み + ズーム)。ノードが 0 件の案内でも同じものを出す。 */
+  function dgToolbar(isolatedCount, langs, hubCount) {
+    const on = (flag) => (flag ? ' on' : '');
+    const legend = DG_LANGS.filter(([code]) => langs.has(code))
+      .map(([code, name]) => `<span class="dg-lg lang-${code}"><i></i>${name}</span>`)
+      .join('');
+    return (
+      `<span class="dg-legend">${legend}` +
+        (hubCount > 0
+          ? `<span class="dg-lg hub" title="入次数が ${DG_HUB_MIN} 以上のサービス。入ってくる線は畳んであり、ホバーか選択で開きます"><i></i>共有ハブ ${hubCount}</span>`
+          : '') +
+        `<span class="dg-lg" title="Tarjan の強連結成分に潰したうえでの最長路の深さです。宣言されたアーキテクチャ層ではありません"><i class="none"></i>帯 = 被依存の深さ</span>` +
+      `</span>` +
+      `<span class="dg-tools">` +
+        `<input id="dg-q" class="dg-search" type="search" placeholder="サービス名で絞り込み" value="${esc(state.dgQ)}">` +
+        `<button id="dg-hop" class="dg-tog${on(state.dgHop)}" title="選択したサービスと、その直接の依存だけを表示する">1 ホップ</button>` +
+        `<button id="dg-api" class="dg-tog${on(state.dgApiOnly)}" title="公開 API(RPC / HTTP / GraphQL)を持つサービスだけを表示する">API のみ</button>` +
+        (isolatedCount > 0
+          ? `<button id="dg-iso" class="dg-tog${on(state.dgIsolated)}" title="どのサービスとも繋がらないものを表示する">独立 ${isolatedCount}</button>`
+          : '') +
+        `<button id="dg-out" class="dg-zoom" title="縮小">−</button>` +
+        `<button id="dg-in" class="dg-zoom" title="拡大">＋</button>` +
+        `<button id="dg-fit" class="dg-zoom">全体を表示</button>` +
+      `</span>`
+    );
+  }
+
   function renderDiagram() {
-    const { tops, edges } = computeServiceGraph();
+    let { tops, edges } = computeServiceGraph();
     if (tops.length === 0) {
       diagramViewEl.innerHTML = '<div class="projwrap"><div class="sub">表示できるサービスがありません</div></div>';
       return;
     }
     const labelOf = (id) => (byId.get(id) ? byId.get(id).label : id);
+
+    // 公開エンドポイント数(⚡RPC / ⇄HTTP / ◈GraphQL)。絞り込みの判定にも使うので先に数える
+    const rpcCount = new Map();
+    const routeCount = new Map();
+    const gqlCount = new Map();
+    for (const n of model.nodes) {
+      if (n.kind === 'rpc') {
+        const impls = rpcImpls.get(n.id);
+        const owner = impls && impls.size > 0 ? chain([...impls][0])[0] : chain(n.id)[0];
+        rpcCount.set(owner, (rpcCount.get(owner) || 0) + 1);
+      } else if (n.kind === 'route' && !(n.meta && n.meta.external)) {
+        const owner = chain(n.id)[0];
+        routeCount.set(owner, (routeCount.get(owner) || 0) + 1);
+      } else if (n.kind === 'gqlfield') {
+        const owner = chain(n.id)[0];
+        gqlCount.set(owner, (gqlCount.get(owner) || 0) + 1);
+      }
+    }
+    const apiCount = (id) => (rpcCount.get(id) || 0) + (routeCount.get(id) || 0) + (gqlCount.get(id) || 0);
+
+    // 「孤立」は絞り込み前のグラフで決める。絞り込みで相手が消えたノードまで孤立扱いにすると、
+    // 「API のみ」が「API 同士が直接繋がっているものだけ」になり、条件を満たすノードごと消える
+    const linkedBase = new Set();
+    for (const e of edges) {
+      linkedBase.add(e.from);
+      linkedBase.add(e.to);
+    }
+
+    // 表示するノードを絞る。選択中のノードは絞り込みでも落とさない(見失うため)
+    const restrict = (keep) => {
+      tops = tops.filter((id) => keep(id) || id === state.focus);
+      const set = new Set(tops);
+      edges = edges.filter((e) => set.has(e.from) && set.has(e.to));
+    };
+    if (state.dgHop && state.focus !== null && tops.includes(state.focus)) {
+      const near = new Set([state.focus]);
+      for (const e of edges) {
+        if (e.from === state.focus) near.add(e.to);
+        if (e.to === state.focus) near.add(e.from);
+      }
+      restrict((id) => near.has(id));
+    }
+    if (state.dgApiOnly) restrict((id) => apiCount(id) > 0);
+
+    // 孤立ノード(元のグラフでどこにも繋がらないもの)は既定で畳む。
+    // 数が多いと本題の依存関係が画面から押し出される。選択中のノードは畳まない
+    const isolated = tops
+      .filter((id) => !linkedBase.has(id) && id !== state.focus)
+      .sort((a, b) => labelOf(a).localeCompare(labelOf(b)));
+    const isolatedSet = new Set(isolated);
+    if (!state.dgIsolated) tops = tops.filter((id) => !isolatedSet.has(id));
+
+    if (tops.length === 0) {
+      diagramViewEl.innerHTML =
+        `<div class="dg-hint">${dgToolbar(isolated.length, new Set(), 0)}</div>` +
+        `<div class="projwrap"><div class="sub">絞り込みの条件に合うサービスがありません。上の絞り込みを外してください</div></div>`;
+      return;
+    }
+
     // レベル付け(依存される側が下)
     const adj = new Map();
     for (const e of edges) {
@@ -2709,42 +2806,39 @@
     const nodeLevel = new Map();
     for (const id of tops) nodeLevel.set(id, levels[compOf.get(id)]);
     const maxLevel = Math.max(...nodeLevel.values());
-    // 行 = レベル(上 = 依存する側)。孤立ノードは最下段の 1 つ下の帯にまとめる
-    const isolated = tops.filter(
-      (id) => !edges.some((e) => e.from === id || e.to === id),
-    );
-    const isolatedSet = new Set(isolated);
     const rows = [];
     for (let L = maxLevel; L >= 0; L--) {
       const row = tops.filter((id) => nodeLevel.get(id) === L && !isolatedSet.has(id));
       if (row.length > 0) rows.push({ level: L, ids: row.sort((a, b) => labelOf(a).localeCompare(labelOf(b))) });
     }
-    if (isolated.length > 0) rows.push({ level: null, ids: isolated.sort((a, b) => labelOf(a).localeCompare(labelOf(b))) });
-    // 公開エンドポイント数(⚡RPC / ⇄HTTP / ◈GraphQL)と規模
-    const rpcCount = new Map();
-    const routeCount = new Map();
-    const gqlCount = new Map();
-    for (const n of model.nodes) {
-      if (n.kind === 'rpc') {
-        const impls = rpcImpls.get(n.id);
-        const owner = impls && impls.size > 0 ? chain([...impls][0])[0] : chain(n.id)[0];
-        rpcCount.set(owner, (rpcCount.get(owner) || 0) + 1);
-      } else if (n.kind === 'route' && !(n.meta && n.meta.external)) {
-        const owner = chain(n.id)[0];
-        routeCount.set(owner, (routeCount.get(owner) || 0) + 1);
-      } else if (n.kind === 'gqlfield') {
-        const owner = chain(n.id)[0];
-        gqlCount.set(owner, (gqlCount.get(owner) || 0) + 1);
-      }
-    }
+    if (isolated.length > 0 && state.dgIsolated) rows.push({ level: null, ids: isolated });
+
+    // 共有ハブに入ってくる線は既定で畳む(DOM には残し、ホバー・選択で開く)。
+    // 選択中のノードに繋がる線は畳まない — いま見たいものを隠さない
+    const inDeg = new Map();
+    for (const e of edges) inDeg.set(e.to, (inDeg.get(e.to) || 0) + 1);
+    const hubs = new Set([...inDeg].filter(([, n]) => n >= DG_HUB_MIN).map(([id]) => id));
+    const isBundled = (e) => hubs.has(e.to) && e.from !== state.focus && e.to !== state.focus;
+    const langs = new Set(tops.map((id) => (byId.get(id) || {}).lang).filter(Boolean));
     // レイアウト
     const BOXH = 54;
     const VGAP = 96;
     const HGAP = 26;
-    const PADX = 90;
+    const PADX = 112; // 帯のラベル(「被依存の深さ N」)より右から箱を置く
     const PADY = 34;
     const LINEGAP = 26; // 同じ層を折り返したときの段の間隔
-    const widthOf = (id) => Math.max(128, labelOf(id).length * 8.5 + 44);
+    // 箱の副題。幅の計算に使うのでレイアウトの前に決める
+    const subOf = (id) => {
+      const parts = [];
+      if ((rpcCount.get(id) || 0) > 0) parts.push(`⚡${rpcCount.get(id)} RPC`);
+      if ((routeCount.get(id) || 0) > 0) parts.push(`⇄${routeCount.get(id)} HTTP`);
+      if ((gqlCount.get(id) || 0) > 0) parts.push(`◈${gqlCount.get(id)} GQL`);
+      if (subtreeLoc(id) > 0) parts.push(`${subtreeLoc(id).toLocaleString('en-US')} loc`);
+      if (hubs.has(id)) parts.push(`⇠${inDeg.get(id)} 依存元`);
+      return parts.join(' ・ ');
+    };
+    // 見出しは 8.5px/字・副題は 6.6px/字で見積もる。副題が長い箱で文字が溢れていた
+    const widthOf = (id) => Math.max(128, labelOf(id).length * 8.5 + 44, subOf(id).length * 6.6 + 30);
     // 1 行に並べきると 100 リポジトリで 15,000px を超える。画面幅で段に折り返す
     const maxRowW = Math.min(2600, Math.max(1100, diagramViewEl.clientWidth || document.body.clientWidth || 1600));
     const pos = new Map(); // id -> {x, y, w}
@@ -2819,7 +2913,8 @@
       const y = row.top - 18;
       const h = row.bottom - row.top + BOXH + 44;
       svg.push(`<rect x="8" y="${y}" width="${totalW - 16}" height="${h}" rx="12" class="dg-band${ri % 2 === 1 ? ' alt' : ''}"/>`);
-      const tag = row.level === null ? '独立' : `層 ${row.level}`;
+      // 「層」ではない — 強連結成分に潰したうえでの最長路の深さ。宣言されたアーキテクチャ層と混同させない
+      const tag = row.level === null ? '独立' : `被依存の深さ ${row.level}`;
       svg.push(`<text x="20" y="${y + 24}" class="dg-lvl">${esc(tag)}</text>`);
     });
     // エッジ
@@ -2838,7 +2933,7 @@
         d = `M ${a.x} ${a.y - BOXH / 2} C ${a.x} ${a.y - BOXH / 2 - 44}, ${b.x} ${b.y + BOXH / 2 + 44}, ${b.x} ${b.y + BOXH / 2}`;
       }
       const width = Math.min(3.6, 1.1 + Math.log2(e.rpc + e.code + 1) * 0.55);
-      const cls = `dg-edge${up ? ' up' : ''}${e.rpc + e.http + e.gql > 0 ? ' rpc' : ''}`;
+      const cls = `dg-edge${up ? ' up' : ''}${e.rpc + e.http + e.gql > 0 ? ' rpc' : ''}${isBundled(e) ? ' bundled' : ''}`;
       svg.push(
         `<path d="${d}" class="${cls}" stroke-width="${width.toFixed(1)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" marker-end="url(#${up ? 'darr-up' : 'darr'})">` +
           `<title>${esc(labelOf(e.from))} → ${esc(labelOf(e.to))}(${[
@@ -2856,7 +2951,7 @@
       const mx = a.x + (b.x - a.x) * 0.45;
       const my = a.y === b.y ? a.y - 50 : a.y + (b.y - a.y) * 0.45 + (up ? 8 : 0);
       if (boundaryLabel) {
-        svg.push(`<text x="${mx}" y="${my}" class="dg-elabel${up ? ' up' : ''}" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${boundaryLabel}</text>`);
+        svg.push(`<text x="${mx}" y="${my}" class="dg-elabel${up ? ' up' : ''}${isBundled(e) ? ' bundled' : ''}" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${boundaryLabel}</text>`);
       }
     }
     // ノード
@@ -2864,16 +2959,17 @@
       const p = pos.get(id);
       if (!p) continue;
       const n = byId.get(id) || { kind: 'module' };
-      const parts = [];
-      if ((rpcCount.get(id) || 0) > 0) parts.push(`⚡${rpcCount.get(id)} RPC`);
-      if ((routeCount.get(id) || 0) > 0) parts.push(`⇄${routeCount.get(id)} HTTP`);
-      if ((gqlCount.get(id) || 0) > 0) parts.push(`◈${gqlCount.get(id)} GQL`);
-      if (subtreeLoc(id) > 0) parts.push(`${subtreeLoc(id).toLocaleString('en-US')} loc`);
-      const sub = parts.join(' ・ ');
+      const sub = subOf(id);
+      const cls =
+        `dg-node k-${n.kind} lang-${n.lang || 'na'}` +
+        `${id.startsWith('ext:') ? ' external' : ''}${state.focus === id ? ' focused' : ''}${hubs.has(id) ? ' hub' : ''}`;
       svg.push(
-        `<g class="dg-node k-${n.kind}${id.startsWith('ext:') ? ' external' : ''}${state.focus === id ? ' focused' : ''}" data-node="${esc(id)}">` +
-          `<title>${esc(labelOf(id))}${sub ? ' — ' + esc(sub) : ''}\nクリックすると依存元・依存先・公開 API を表示します</title>` +
+        `<g class="${cls}" data-node="${esc(id)}">` +
+          `<title>${esc(labelOf(id))}${sub ? ' — ' + esc(sub) : ''}\n` +
+          `${hubs.has(id) ? '入ってくる線は畳んであります。ホバーか選択で開きます\n' : ''}` +
+          `クリックすると依存元・依存先・公開 API を表示します</title>` +
           `<rect x="${p.x - p.w / 2}" y="${p.y - BOXH / 2}" width="${p.w}" height="${BOXH}" rx="10"/>` +
+          `<rect class="dg-langbar" x="${p.x - p.w / 2 + 2}" y="${p.y - BOXH / 2 + 9}" width="3" height="${BOXH - 18}" rx="1.5"/>` +
           `<text x="${p.x}" y="${p.y - 4}" class="dg-label">${esc(labelOf(id))}</text>` +
           `<text x="${p.x}" y="${p.y + 15}" class="dg-sub">${esc(sub)}</text>` +
           `</g>`,
@@ -2883,16 +2979,29 @@
     dgLayoutWidth = maxRowW;
     dgView = null; // 再描画したら表示位置は全体に戻す
     diagramViewEl.innerHTML =
-      `<div class="dg-hint">` +
-        `<span>クリック = 詳細パネル(依存・公開API・経路探索) ・ ホバー = 関連する線を強調 ・ 上向きの<b class="dg-up-word">ローズの線</b> = レイヤー違反</span>` +
-        `<span class="dg-tools">⌘/Ctrl + ホイールかキーボード(← ↑ → ↓ / + − 0)` +
-          `<button id="dg-out" class="dg-fit" title="縮小">−</button>` +
-          `<button id="dg-in" class="dg-fit" title="拡大">＋</button>` +
-          `<button id="dg-fit" class="dg-fit">全体を表示</button></span>` +
+      `<div class="dg-hint" title="クリック = 詳細パネル(依存・公開API・経路探索) ・ ホバー = 関連する線を強調 ・ 右クリック = そのサービスを非表示 ・ ⌘/Ctrl + ホイールかキーボード(← ↑ → ↓ / + − 0)で拡大縮小">` +
+        dgToolbar(isolated.length, langs, hubs.size) +
       `</div>` +
       `<div class="dg-scroll"><svg id="dg-svg" xmlns="http://www.w3.org/2000/svg" tabindex="0" role="group" aria-label="アーキテクチャ図(矢印キーで移動、+ − で拡大縮小、0 で全体表示)" preserveAspectRatio="xMidYMid meet" viewBox="0 0 ${totalW} ${totalH}">${svg.join('')}</svg></div>`;
     dgApplyView();
     dgHideOverlappingLabels();
+    dgApplyQuery();
+  }
+
+  /**
+   * 絞り込み文字列に一致しない箱を減光する。
+   * 入力のたびに組み直すと拡大位置と入力フォーカスを失うので、クラスの付け替えだけで済ませる。
+   */
+  function dgApplyQuery() {
+    const svgEl = diagramViewEl.querySelector('#dg-svg');
+    if (!svgEl) return;
+    const q = state.dgQ.trim().toLowerCase();
+    for (const g of svgEl.querySelectorAll('.dg-node')) {
+      const node = byId.get(g.dataset.node);
+      const label = ((node && node.label) || g.dataset.node).toLowerCase();
+      g.classList.toggle('dim', q !== '' && !label.includes(q));
+    }
+    svgEl.classList.toggle('filtered', q !== '');
   }
 
   /**
@@ -3002,6 +3111,24 @@
     { passive: false },
   );
 
+  diagramViewEl.addEventListener('input', (ev) => {
+    if (ev.target.id !== 'dg-q') return;
+    state.dgQ = ev.target.value;
+    dgApplyQuery();
+  });
+
+  // 右クリックでそのサービスを非表示にする(構造タブの ⊘ と同じ状態。ヘッダーの「非表示 N」で戻せる)
+  diagramViewEl.addEventListener('contextmenu', (ev) => {
+    const g = ev.target.closest && ev.target.closest('[data-node]');
+    if (!g) return;
+    ev.preventDefault();
+    state.structHidden.add(g.dataset.node);
+    persistHidden();
+    if (state.focus === g.dataset.node) state.focus = null;
+    render(); // ヘッダーの「非表示 N」バッジと構造ビューを合わせる
+    renderDiagram();
+  });
+
   // ホイールもドラッグも使えない環境向け。SVG は tabindex で focus できる
   diagramViewEl.addEventListener('keydown', (ev) => {
     const svgEl = diagramViewEl.querySelector('#dg-svg');
@@ -3065,6 +3192,12 @@
     }
     if (ev.target.id === 'dg-in') return dgZoomAt(0.8);
     if (ev.target.id === 'dg-out') return dgZoomAt(1.25);
+    const toggle = { 'dg-hop': 'dgHop', 'dg-api': 'dgApiOnly', 'dg-iso': 'dgIsolated' }[ev.target.id];
+    if (toggle) {
+      state[toggle] = !state[toggle];
+      renderDiagram();
+      return;
+    }
     const g = ev.target.closest && ev.target.closest('[data-node]');
     if (!g) return;
     const id = g.dataset.node;
