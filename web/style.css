@@ -39,6 +39,11 @@
   --cyc-fg: #9f1239;
   --kind-svc: #7c3aed;
   --kind-proto: #0891b2;
+  /* 図タブ: 言語の識別色 */
+  --lang-go: #0e7490;
+  --lang-ts: #1d4ed8;
+  --lang-py: #a16207;
+  --lang-ex: #7e22ce;
   --warn: #b7791f;
   /* コード配色 */
   --tok-c: #6b7f83;
@@ -88,6 +93,10 @@
     --cyc-fg: #fda4af;
     --kind-svc: #a78bfa;
     --kind-proto: #22d3ee;
+    --lang-go: #22d3ee;
+    --lang-ts: #7dd3fc;
+    --lang-py: #fbbf24;
+    --lang-ex: #c084fc;
     --warn: #e0af68;
     --tok-c: #7d8f93;
     --tok-s: #6ee7b7;
@@ -128,6 +137,10 @@
   --cyc-fg: #fda4af;
   --kind-svc: #a78bfa;
   --kind-proto: #22d3ee;
+  --lang-go: #22d3ee;
+  --lang-ts: #7dd3fc;
+  --lang-py: #fbbf24;
+  --lang-ex: #c084fc;
   --warn: #e0af68;
   --tok-c: #7d8f93;
   --tok-s: #6ee7b7;
@@ -698,8 +711,18 @@ body.tab-diagram .searchwrap { display: none !important; }
   justify-content: space-between;
   flex-wrap: wrap;
 }
-#diagramview .dg-tools { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
-#diagramview .dg-fit {
+#diagramview .dg-tools { display: flex; gap: 6px; align-items: center; white-space: nowrap; flex-wrap: wrap; }
+#diagramview .dg-legend { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+#diagramview .dg-lg { display: inline-flex; gap: 5px; align-items: center; }
+#diagramview .dg-lg i { width: 9px; height: 9px; border-radius: 2px; background: var(--line-strong); }
+#diagramview .dg-lg i.none { background: var(--band); border: 1px solid var(--line-strong); }
+#diagramview .dg-lg.lang-go i { background: var(--lang-go); }
+#diagramview .dg-lg.lang-ts i { background: var(--lang-ts); }
+#diagramview .dg-lg.lang-py i { background: var(--lang-py); }
+#diagramview .dg-lg.lang-ex i { background: var(--lang-ex); }
+#diagramview .dg-lg.hub i { background: transparent; border: 1.5px dashed var(--kind-proto); border-radius: 50%; }
+#diagramview .dg-zoom,
+#diagramview .dg-tog {
   font: inherit;
   color: var(--fg);
   background: var(--raised);
@@ -708,8 +731,19 @@ body.tab-diagram .searchwrap { display: none !important; }
   padding: 2px 10px;
   cursor: pointer;
 }
-#diagramview .dg-fit:hover { border-color: var(--accent); color: var(--accent); }
-#diagramview .dg-up-word { color: var(--up); }
+#diagramview .dg-zoom:hover,
+#diagramview .dg-tog:hover { border-color: var(--accent); color: var(--accent); }
+#diagramview .dg-tog.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+#diagramview .dg-search {
+  font: inherit;
+  color: var(--fg);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 2px 8px;
+  width: 170px;
+}
+#diagramview .dg-search:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 /* 実寸で吐かず viewBox で拡大縮小するので、はみ出しはスクロールでなくズームで見る */
 #diagramview .dg-scroll { flex: 1; overflow: hidden; min-height: 0; }
 #dg-svg { display: block; width: 100%; height: 100%; touch-action: none; }
@@ -735,6 +769,21 @@ body.tab-diagram .searchwrap { display: none !important; }
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .10));
 }
 #dg-svg .dg-node:hover rect { stroke: var(--accent); stroke-width: 1.8; }
+/* 言語の識別色(箱の左端の細い帯) */
+#dg-svg .dg-langbar { fill: transparent; stroke: none; filter: none; }
+#dg-svg .lang-go .dg-langbar { fill: var(--lang-go); }
+#dg-svg .lang-ts .dg-langbar { fill: var(--lang-ts); }
+#dg-svg .lang-py .dg-langbar { fill: var(--lang-py); }
+#dg-svg .lang-ex .dg-langbar { fill: var(--lang-ex); }
+/* 共有ハブ(入次数が多く、入る線を畳んでいるもの) */
+#dg-svg .dg-node.hub > rect:first-of-type { stroke: var(--kind-proto); stroke-dasharray: 5 3; }
+/* 畳んだ線。ホバー・選択で開く(件数は箱の ⇠N と線の title に残る) */
+#dg-svg .dg-edge.bundled,
+#dg-svg .dg-elabel.bundled { display: none; }
+#dg-svg.hovering .dg-edge.bundled.rel,
+#dg-svg.hovering .dg-elabel.bundled.rel { display: block; }
+/* 絞り込みに一致しない箱 */
+#dg-svg .dg-node.dim { opacity: .22; }
 /* 外部システム(自リポジトリ外)は破線枠で区別する */
 #dg-svg .dg-node.external rect { stroke-dasharray: 6 4; fill: var(--panel); }
 #dg-svg .dg-node.focused rect { stroke: var(--accent); stroke-width: 2.4; fill: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
