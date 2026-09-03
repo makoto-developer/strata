@@ -19,6 +19,7 @@
 import type { Ctx } from '../context.ts';
 import { makeLineFinder, matchBrace, stripSource } from '../lex.ts';
 import { setEvidence } from '../model.ts';
+import { globToRegex } from '../path-glob.ts';
 import {
   buildFuncIndex,
   buildShortNameIndex,
@@ -522,6 +523,23 @@ export function detectHttp(ctx: Ctx): void {
     for (const { id } of webhookRoutes) ctx.builder.addEdge(inId, id, 'http');
   }
 
+  // ホスト付きで呼んでいる先を社内ルートに繋いでよいか。
+  //
+  // パスだけで照合すると、別会社の GET /users/{id} が社内の同じパスに化ける
+  // (fmt.Sprintf("https://partner.example.com/users/%s", id) が実際に社内ルートへ繋がった)。
+  // 嘘の社内依存はこのツールでいちばん出してはいけない誤りなので、ホストで切る。
+  //
+  // 既定は「ドットを含まないホストは社内」。gateway:8080 や user-service のような
+  // 1 語のホスト名はクラスタ内のサービス名で、公開ドメインは必ずドットを含む。
+  // api.internal.example.com のような FQDN を社内扱いにしたいときは internalHosts に書く。
+  const internalHostPatterns = (ctx.config.http?.internalHosts ?? []).map((h) => globToRegex(h.toLowerCase()));
+  const isInternalHost = (host: string | undefined): boolean => {
+    if (host === undefined || host === '') return true; // ホストが無い = 相対パス
+    const name = host.toLowerCase().split(':')[0];
+    if (!name.includes('.')) return true; // クラスタ内のサービス名
+    return internalHostPatterns.some((re) => re.test(name) || re.test(host.toLowerCase()));
+  };
+
   // クライアント呼び出しの解決
   for (const call of calls) {
     const from = enclosingNodeId(ctx, funcIndex, call.file, call.line);
@@ -529,8 +547,10 @@ export function detectHttp(ctx: Ctx): void {
     const site = { f: call.file, l: call.line };
     const key = call.method ? pathKey(call.method, call.raw) : '';
     const pk = normalizePath(call.raw).toLowerCase();
-    let targets = key ? (byKey.get(key) ?? []) : [];
-    if (targets.length === 0) targets = byPath.get(pk) ?? [];
+    // 社内と明示されていないホストへの呼び出しは、社内ルートの候補に載せない
+    const mayBeInternal = isInternalHost(call.host);
+    let targets = mayBeInternal && key ? (byKey.get(key) ?? []) : [];
+    if (mayBeInternal && targets.length === 0) targets = byPath.get(pk) ?? [];
     if (targets.length === 1) {
       ctx.builder.addEdge(from, targets[0], 'http', 1, site);
       continue;

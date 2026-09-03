@@ -176,6 +176,31 @@ function scanWithout(dir, key) {
   else fail('mock の呼び出しが検出されていない(フィルタの検証対象が無い)');
 }
 
+// --- パターン B4: 同じパスを社内と社外の両方へ呼ぶ。ホストを見ないと嘘の社内依存になる ---
+{
+  const dir = path.join(patternsDir, 'http-host');
+  const model = scan(dir);
+  const http = model.edges.filter((e) => e.kind === 'http');
+  const partner = http.find((e) => e.from.includes('fetchPartner'));
+  const internal = http.find((e) => e.from.includes('fetchInternal'));
+
+  if (partner && partner.to.startsWith('ext:http:out:'))
+    ok('HTTP ホスト: 別会社への呼び出しを社内ルートに繋がない');
+  else fail('別会社の呼び出しが社内ルートに繋がっている: ' + JSON.stringify(partner));
+
+  if (internal && internal.to.includes('internal-api'))
+    ok('HTTP ホスト: internalHosts に書いたホストは社内ルートへ繋ぐ');
+  else fail('社内ホストが繋がっていない: ' + JSON.stringify(internal));
+
+  // 設定を外すと、社内扱いのホストが無くなるので社内ルートには繋がない(取りこぼし側に倒す)
+  const off = scanWith(dir, (config) => {
+    delete config.http;
+  });
+  if (off.edges.filter((e) => e.kind === 'http').every((e) => e.to.startsWith('ext:http:out:')))
+    ok('HTTP ホスト: 設定が無ければホスト付きの呼び出しは社内に繋がない');
+  else fail('設定が無いのに社内ルートへ繋いでいる');
+}
+
 // --- パターン C: 同じ proto を Go 実装 / TS 呼び出し / Python 呼び出しが囲む ---
 {
   const model = scan(path.join(patternsDir, 'polyglot'));

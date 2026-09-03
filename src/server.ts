@@ -67,7 +67,10 @@ export function bundleViewerJs(): string {
     if (buf === null) throw new Error(`ビューアの資産が見つかりません: ${name}`);
     parts.push(`// ---- ${name} ----\n${strip(buf.toString('utf8'))}`);
   }
-  return `(function () {\n${parts.join('\n')}\n})();\n`;
+  // 外側を IIFE で包まない。包むと最後の式(app.js の初期化 Promise)が飲まれ、
+  // eval して await する DOM スタブのテストが初期化完了を待てなくなる。
+  // app.js は自前で IIFE に入っており、モジュール側はトップレベル関数を 1 つ置くだけ
+  return `${parts.join('\n')}\n`;
 }
 
 export function readWebAsset(name: string): Buffer | null {

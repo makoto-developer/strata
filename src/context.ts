@@ -27,6 +27,11 @@ export interface Config {
   http?: {
     enabled?: boolean;
     externalHosts?: boolean; // 未解決の絶対 URL を「外部システム」ノードにする(既定 true)
+    // 社内のサービスとみなすホスト(ワイルドカード可: "*.internal.example.com")。
+    // ドットを含まないホスト(gateway:8080 のようなクラスタ内のサービス名)は既定で社内扱い。
+    // ドットを含む FQDN を社内にしたいときだけ書く。書かないホストは社内ルートに繋がない
+    // — 別会社の同じパスに化けるのを防ぐため
+    internalHosts?: string[];
     webhookPatterns?: string[]; // webhook 扱いにするパスの追加パターン(部分一致)
   };
   // GraphQL 検出。既定は有効

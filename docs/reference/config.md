@@ -20,6 +20,8 @@ nav_order: 2
   ],
 
   "exclude": ["experimental", "**/e2e/**"], // 除外(パス前方一致 / ディレクトリ名 / グロブ)
+  // 社内のサービスとみなすホスト(ドットを含まないホストは既定で社内扱い)
+  "http": { "internalHosts": ["api.internal.example.com", "*.svc.cluster.local"] },
   "includeTests": false,              // テストコードをグラフに含めるか(既定 false)
   "testPaths": ["tools/test-client"], // テスト扱いにする追加パス
 
