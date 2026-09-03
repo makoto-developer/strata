@@ -21,6 +21,7 @@ import { detectMessaging } from './analyzers/messaging.ts';
 import { resolveInfraTopics } from './analyzers/infra.ts';
 import { detectHttp } from './analyzers/http.ts';
 import { detectGraphql } from './analyzers/graphql.ts';
+import { registerOpenapi, linkOpenapi, isSpecFile } from './analyzers/openapi.ts';
 import { collectRpcCallEvidence } from './rpc-call-evidence.ts';
 import { resolveIndirection } from './indirection.ts';
 import { markViolations } from './rules.ts';
@@ -236,6 +237,7 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
       exFiles: [],
       pyFiles: [],
       gqlFiles: [],
+      openapiFiles: [],
       protoFiles: [],
       genGrpcFiles: [],
       testFiles: [],
@@ -245,12 +247,14 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
   const pseudo: Project = {
     rootRel: '', nodeId: '', name: '(workspace)',
     hasGo: false, hasJs: false, hasEx: false, hasPy: false,
-    goFiles: [], jsFiles: [], exFiles: [], pyFiles: [], gqlFiles: [], protoFiles: [], genGrpcFiles: [], testFiles: [],
+    goFiles: [], jsFiles: [], exFiles: [], pyFiles: [], gqlFiles: [], openapiFiles: [], protoFiles: [], genGrpcFiles: [], testFiles: [],
   };
   const hasWsRootProject = projects.has('');
 
+  const specEnabled = config.openapi?.enabled !== false;
   for (const rel of files) {
-    const kind = isSourceFile(rel, config);
+    // 仕様書はソースコードではないので isSourceFile の分類とは別に拾う
+    const kind = isSourceFile(rel, config) ?? (specEnabled && isSpecFile(path.join(rootAbs, rel), rel) ? 'openapi' : undefined);
     if (!kind) continue;
     let owner: Project | undefined;
     for (const rootRel of rootsSorted) {
@@ -266,6 +270,7 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
     else if (kind === 'elixir') owner.exFiles.push(rel);
     else if (kind === 'py') owner.pyFiles.push(rel);
     else if (kind === 'gql') owner.gqlFiles.push(rel);
+    else if (kind === 'openapi') owner.openapiFiles.push(rel);
     else if (kind === 'gengrpc') owner.genGrpcFiles.push(rel);
     else if (kind === 'test') owner.testFiles.push(rel);
     else owner.protoFiles.push(rel);
@@ -428,6 +433,7 @@ export function scan(rootDir: string): Graph {
     rpcByName: new Map(),
     rpcByNameLower: new Map(),
     rpcOfProto: new Map(),
+    declaredRoutes: new Map(),
     protoFiles: [],
     protoByBase: new Map(),
     jsFileIds: new Set(),
@@ -453,7 +459,9 @@ export function scan(rootDir: string): Graph {
   linkTests(ctx); // rpcByName 索引が揃った後に実行する
   detectConfigSurface(ctx); // 各サービスの環境変数(設定サーフェス)を meta に付与
   detectMessaging(ctx); // Pub/Sub のトピック経由の依存(config.messaging がある時のみ)
+  registerOpenapi(ctx, ctx.projects); // 宣言された API。呼び出し解決の候補にするため detectHttp より先
   detectHttp(ctx); // HTTP(REST / webhook)のルートと呼び出し。関数ノードが揃った後に実行する
+  linkOpenapi(ctx); // 宣言と実装の突き合わせ。ルートノードが揃った後に実行する
   detectGraphql(ctx); // GraphQL スキーマ・リゾルバ・操作・federation
   // フェーズ A(収集)→ フェーズ B(解決)。間接層を越えた呼び出しは全ノードが揃ってから繋ぐ
   collectRpcCallEvidence(ctx);

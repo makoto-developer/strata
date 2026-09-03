@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { scan } from '../src/scan.ts';
 import { parseGraph } from '../src/model.ts';
 import { findTopicRefs } from '../src/analyzers/messaging.ts';
+import { parseSpec } from '../src/analyzers/openapi.ts';
 
 const fail = (msg) => { console.error('✖ ' + msg); process.exitCode = 1; };
 const ok = (msg) => console.log('✓ ' + msg);
@@ -318,6 +319,82 @@ function scanWithout(dir, key) {
   // 同じ id の再定義を「同名の別メソッド」と誤認すると、呼び出しごと消える
   if (call) ok('build tag: 呼び出しを曖昧扱いで落とさない');
   else fail('build tag: 呼び出しが消えている');
+}
+
+// --- パターン N: OpenAPI 仕様書の取り込みと、宣言 / 実装のずれ ---
+{
+  const model = scan(path.join(patternsDir, 'openapi-spec'));
+  const declared = model.nodes.filter((n) => n.kind === 'route' && (n.meta || {}).declared);
+  if (declared.length === 4) ok('OpenAPI: paths を 4 エンドポイント読む');
+  else fail(`OpenAPI: 読み取り数が違う (${declared.map((n) => n.label).join(',')})`);
+  // どのサービスにもある /health が、他サービスの実装に化けないこと
+  const cross = model.edges.filter(
+    (e) => e.kind === 'impl' && e.from.includes('openapi.yaml') && e.to.includes('order-api'),
+  );
+  if (cross.length === 0) ok('OpenAPI: 同名パスを他サービスの実装に繋がない');
+  else fail(`OpenAPI: 他サービスへ誤接続している (${cross.map((e) => e.to).join(',')})`);
+  // 社内ホストというだけでは宛先を決められない
+  const wrongHost = model.edges.find(
+    (e) => e.from.includes('CreateOnBilling') && e.to.includes('openapi.yaml'),
+  );
+  if (!wrongHost) ok('OpenAPI: ホストが違う呼び出しを宣言に繋がない');
+  else fail(`OpenAPI: 別ホスト宛てを仕様書に繋いでいる (${wrongHost.to})`);
+  // servers[0].url のパス部分(/v1)を前置しないとコード側のルートと一致しない
+  if (declared.every((n) => n.label.includes('/v1/'))) ok('OpenAPI: servers の基底パスを前置する');
+  else fail('OpenAPI: 基底パスが効いていない');
+  const getUser = declared.find((n) => n.label === 'GET /v1/users/{}');
+  if (getUser && (getUser.meta || {}).operationId === 'getUser') ok('OpenAPI: operationId を残す');
+  else fail('OpenAPI: operationId が読めていない');
+  const impl = model.edges.filter((e) => e.kind === 'impl' && e.from.includes('openapi.yaml'));
+  if (impl.length === 1 && impl[0].evidence === 'configured')
+    ok('OpenAPI: 宣言を実装に繋ぐ(根拠は仕様書)');
+  else fail(`OpenAPI: 宣言→実装が期待どおりでない (${impl.length})`);
+  const w = model.warnings.join('\n');
+  if (/宣言だけで実装が見つかりません.*POST \/v1\/users/.test(w)) ok('OpenAPI: 未実装の宣言を報告する');
+  else fail('OpenAPI: 未実装の宣言を報告していない');
+  if (/実装だけで宣言が見つかりません.*\/v1\/orders/.test(w)) ok('OpenAPI: 未文書化の実装を報告する');
+  else fail('OpenAPI: 未文書化の実装を報告していない');
+  // 提供側の実装がワークスペースに無くても、宣言があれば依存が見える
+  const call = model.edges.find(
+    (e) => e.kind === 'http' && e.to === 'user-api/api/openapi.yaml#POST /v1/users',
+  );
+  if (call && call.evidence === 'configured') ok('OpenAPI: 実装の無い宣言にも呼び出しを繋ぐ');
+  else fail('OpenAPI: 宣言への呼び出しが繋がっていない');
+}
+
+// --- OpenAPI パーサ単体: 存在しないエンドポイントを作らないこと ---
+{
+  // 変数入りの servers.url を URL と誤読すると /{}:/{}/v1 という基底パスができる
+  const varUrl = parseSpec('openapi: 3.0.0\nservers:\n  - url: "{scheme}://{host}/v1"\npaths:\n  /x:\n    get: {}\n');
+  if (varUrl && varUrl.basePath === '/v1') ok('OpenAPI: 変数入りの servers.url からパスだけ取る');
+  else fail(`OpenAPI: 基底パスが壊れている (${varUrl && varUrl.basePath})`);
+  const noPath = parseSpec('openapi: 3.0.0\nservers:\n  - url: https://api.example.com\npaths:\n  /x:\n    get: {}\n');
+  if (noPath && noPath.basePath === undefined) ok('OpenAPI: パスの無い servers.url では基底パスを作らない');
+  else fail(`OpenAPI: 余計な基底パスを作っている (${noPath && noPath.basePath})`);
+  // --- で区切られた別文書の paths を仕様書の一部と誤読しないこと
+  const multi = parseSpec('paths:\n  /ghost:\n    get: {}\n---\nopenapi: 3.0.0\npaths:\n  /real:\n    get: {}\n');
+  if (multi && multi.ops.length === 1 && multi.ops[0].rawPath === '/real')
+    ok('OpenAPI: 別文書の paths を取り込まない');
+  else fail(`OpenAPI: 別文書を読んでいる (${multi && multi.ops.map((o) => o.rawPath).join(',')})`);
+}
+
+// --- OpenAPI パーサ単体: JSON(swagger 2.0 / basePath)---
+{
+  const spec = parseSpec(
+    JSON.stringify({
+      swagger: '2.0',
+      basePath: '/api/v2',
+      info: { title: 'Legacy', version: '2.0.0' },
+      paths: {
+        '/items/{id}': { get: { operationId: 'getItem' }, put: {} },
+        '/health': { get: {} },
+      },
+    }),
+  );
+  if (spec && spec.ops.length === 3) ok('OpenAPI(JSON): paths を読む');
+  else fail(`OpenAPI(JSON): 読み取り数が違う (${spec && spec.ops.length})`);
+  if (spec && spec.basePath === '/api/v2') ok('OpenAPI(JSON): swagger 2.0 の basePath を読む');
+  else fail(`OpenAPI(JSON): basePath が違う (${spec && spec.basePath})`);
 }
 
 // --- パターン J: 手書きの interface / モックを gRPC 呼び出しと誤認しない ---

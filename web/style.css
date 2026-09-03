@@ -1340,6 +1340,14 @@ body.tab-diff .searchwrap { display: none !important; }
   padding: 0 7px;
   font-size: 9.5px;
 }
+/* 仕様書の宣言。実装と同じ見た目にすると「実装がある」と誤読される */
+.badge-decl {
+  color: var(--accent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: var(--pill);
+  padding: 0 7px;
+  font-size: 9.5px;
+}
 #apilist .frow { display: flex; align-items: center; gap: 6px; }
 #apilist .frow.chips { align-items: flex-start; }
 #apilist .frow > label {

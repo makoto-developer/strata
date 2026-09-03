@@ -559,6 +559,25 @@ export function detectHttp(ctx: Ctx): void {
       ctx.stats.ambiguous++; // 曖昧: 誤接続を避けて張らない(取りこぼしとして数える)
       continue;
     }
+    // コードに実装が無くても OpenAPI で宣言されていれば、そこへ繋ぐ。
+    // 提供側がワークスペースに無い構成(別リポジトリ・別チーム)でも依存が見える。
+    //
+    // ただし「社内ホスト」は外部でないことしか言っていない。パスが一意なだけで繋ぐと、
+    // http://billing/health の呼び出しが user-api の仕様書に化ける。
+    // ホスト名が宛先サービスと一致するか、ホスト無し(自サービス内の相対パス)のときだけ繋ぐ
+    if (key) {
+      const declared = (ctx.declaredRoutes.get(key) ?? []).filter((id) =>
+        call.host ? serviceMatchesHost(ctx, id, call.host) : topAncestorId(ctx, id) === topAncestorId(ctx, from),
+      );
+      if (declared.length === 1) {
+        setEvidence(ctx.builder.addEdge(from, declared[0], 'http', 1, site), 'configured');
+        continue;
+      }
+      if (declared.length > 1) {
+        ctx.stats.ambiguous++;
+        continue;
+      }
+    }
     // どのルートにも当たらない絶対 URL は「外部システム」への送信として残す
     if (call.host && ctx.config.http?.externalHosts !== false) {
       ctx.builder.addNode({ id: EXT_OUT_ID, label: '外部への送信(HTTP)', kind: 'service', lang: 'http' });
@@ -574,4 +593,13 @@ export function detectHttp(ctx: Ctx): void {
       ctx.builder.addEdge(from, extId, 'http', 1, site);
     }
   }
+}
+
+/** 呼び出し先ホスト名が、そのノードの属するサービスを指しているか。 */
+function serviceMatchesHost(ctx: Ctx, nodeId: string, host: string): boolean {
+  const svc = ctx.builder.get(topAncestorId(ctx, nodeId));
+  if (!svc) return false;
+  const norm = (v: string): string => v.toLowerCase().split(':')[0].split('.')[0].replace(/[_-]/g, '');
+  const h = norm(host);
+  return h !== '' && (norm(svc.label) === h || norm(svc.id) === h);
 }

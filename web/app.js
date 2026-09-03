@@ -1955,14 +1955,17 @@ import { initDiagram } from './diagram.js';
       (nm.deprecated ? ' <span class="warnmark badge-dep">deprecated</span>' : '') +
       (nm.streaming ? ` <span class="warnmark badge-stream" title="streaming">⇄ ${esc(nm.streaming)}</span>` : '') +
       (nm.webhook ? ' <span class="warnmark badge-hook" title="webhook の受信口 / 送信先">webhook</span>' : '') +
-      (nm.framework ? ` <span class="warnmark badge-fw" title="検出したフレームワーク">${esc(nm.framework)}</span>` : '');
+      (nm.framework ? ` <span class="warnmark badge-fw" title="検出したフレームワーク">${esc(nm.framework)}</span>` : '') +
+      (nm.declared ? ' <span class="warnmark badge-decl" title="OpenAPI 仕様書で宣言されたエンドポイント。実装はコード側の行">宣言</span>' : '');
     const sig = nm.req
       ? `<div class="sub">${nm.streaming === 'client' || nm.streaming === 'bidi' ? 'stream ' : ''}${esc(nm.req)} → ` +
         `${nm.streaming === 'server' || nm.streaming === 'bidi' ? 'stream ' : ''}${esc(nm.res)}</div>`
       : nm.gqlType
         ? `<div class="sub">${esc(nm.gqlKind || 'query')} → ${esc(nm.gqlType)}</div>`
         : nm.method
-          ? `<div class="sub">${esc(nm.method)} ${esc(nm.path || '')}</div>`
+          ? `<div class="sub">${esc(nm.method)} ${esc(nm.path || '')}` +
+            (nm.operationId ? ` <span class="loc">operationId: ${esc(nm.operationId)}</span>` : '') +
+            `</div>`
           : '';
     const docHtml = nm.doc ? `<div class="rpcdoc flowdoc">${esc(nm.doc)}</div>` : '';
     const headIcon = n.kind === 'route' ? '⇄' : n.kind === 'gqlfield' ? '◈' : '⚡';
@@ -1983,7 +1986,7 @@ import { initDiagram } from './diagram.js';
   // 線を引いた根拠。弱いものを黙って混ぜないよう、フローの各行に出す
   const EVIDENCE_LABEL = {
     exact: '完全修飾名の一致 — 強い',
-    configured: '設定で明示',
+    configured: '設定 / API 仕様書で明示',
     structural: '構造的な証拠(解決済み import / 生成コードの埋め込み / 登録)',
     name: '名前が一致しただけ — 弱い',
   };

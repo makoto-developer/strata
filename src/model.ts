@@ -20,6 +20,9 @@ export interface NodeMeta {
   file?: string; // 定義ファイルの ws 相対パス
   line?: number; // 定義行(1 始まり)
   variants?: string[]; // 同じ id を作る別定義(Go の build tag で排他な実装)
+  spec?: 'openapi'; // API 仕様書ファイル
+  declared?: boolean; // 仕様書で宣言されたエンドポイント(コードから見つけた実装と対にする)
+  operationId?: string; // OpenAPI の operationId
   doc?: string; // 説明文(godoc / proto コメント等)
   entry?: 'main' | 'view'; // エントリーポイント種別(プロセス起動点 / LiveView 画面)
   events?: string[]; // LiveView の handle_event 名

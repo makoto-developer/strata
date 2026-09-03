@@ -36,7 +36,9 @@ function looksLikeGrpcHandler(sig: string): boolean {
   // 「error を返す」ことに加えて「ctx を取る or ストリーム型を取る」で見る。
   // ポインタ引数までは要求しない — 手書きの薄い実装で普通に外れるため
   if (!/\berror\b/.test(rets)) return false;
-  return /\bcontext\.Context\b/.test(params) || /\b\w+(Server|Stream)\b/.test(params);
+  // import stdctx "context" のような別名でも本物のハンドラなので、修飾子は問わない。
+  // 「.Context を受けて error を返す」だけでも、無関係なメソッドはほぼ落ちる
+  return /\b\w+\.Context\b/.test(params) || /\b\w+(Server|Stream)\b/.test(params);
 }
 
 interface GoFileInfo {
