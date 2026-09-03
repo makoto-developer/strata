@@ -1,7 +1,7 @@
 // 自己完結 HTML の生成(docs/SPEC.md §8.4)。CSS/JS/モデルをすべてインライン化する。
 
 import type { Graph } from './model.ts';
-import { readWebAsset } from './server.ts';
+import { bundleViewerJs, readWebAsset } from './server.ts';
 
 export function exportHtml(model: Graph): string {
   const read = (name: string): string => {
@@ -11,7 +11,7 @@ export function exportHtml(model: Graph): string {
   };
   const html = read('index.html');
   const css = read('style.css');
-  const js = read('app.js');
+  const js = bundleViewerJs();
   // インライン化した JS / JSON が <script> を閉じてしまわないようにする。
   // `<` を < にすれば "</script>" も U+2028/2029 も安全に埋め込める。
   const json = JSON.stringify(model).replace(/</g, '\\u003c');

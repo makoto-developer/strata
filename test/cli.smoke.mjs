@@ -909,6 +909,11 @@ try {
   // 起動オーバーレイはサーバ経由の解析待ち用。JS が動かないと不透明な板だけが残るので入れない
   if (!html.includes('id="boot"') && html.includes('id="layout"')) ok('export: 起動オーバーレイを含まない');
   else fail('export に起動オーバーレイが残っている(JS 無効時に画面が覆われる)');
+  // ビューアは view 単位のモジュールに分かれている。1 本にまとめた結果が入っていること
+  const modulesIn = ['diagram.js ----', 'app.js ----'].every((m) => html.includes(m));
+  const leftover = /^\s*(import|export)\s/m.test(html.replace(/&[a-z]+;/g, ''));
+  if (modulesIn && !leftover) ok('export: ビューアのモジュールを 1 本にまとめて埋め込む');
+  else fail(`export のバンドルが想定外(モジュール=${modulesIn} / import・export の残留=${leftover})`);
 
   // インラインの JSON が元のモデルに戻せるか(< のエスケープが JSON を壊していないか)
   const m = /window\.STRATA_MODEL = ([\s\S]*?);<\/script>/.exec(html);

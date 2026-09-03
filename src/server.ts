@@ -40,6 +40,36 @@ export function webDir(): string {
  * 単一実行ファイル(SEA)として配布したときは web/ がディスクに無いため、
  * 実行ファイルへ埋め込んだ資産から読む。開発時・git clone 実行時は web/ から読む。
  */
+/**
+ * ビューアを構成するモジュール。バンドルする順に並べる(相互 import はしない)。
+ * app.js が最後 — 前のモジュールが定義したものを使うため。
+ */
+const VIEWER_MODULES = ['diagram.js', 'app.js'];
+
+/**
+ * ビューアの JS を 1 本にまとめる。
+ *
+ * ソースは view 単位のモジュールに分けてあるが、配る先は
+ * (a) ローカルサーバ (b) 自己完結 HTML の 2 つで、どちらも 1 本のほうが素直
+ * (エクスポート HTML はインライン script なので相対 import を解決できない)。
+ * ブラウザとエクスポートで別経路にすると、片方だけ壊れても気付けないので同じものを配る。
+ *
+ * import / export はソースの読みやすさのために書いてあるだけなので、ここで落とす。
+ */
+export function bundleViewerJs(): string {
+  const strip = (src: string): string =>
+    src
+      .replace(/^import\s[^;]*;[ \t]*$/gm, '') // 行頭の import 文だけを落とす
+      .replace(/^export\s+/gm, '');
+  const parts: string[] = [];
+  for (const name of VIEWER_MODULES) {
+    const buf = readWebAsset(name);
+    if (buf === null) throw new Error(`ビューアの資産が見つかりません: ${name}`);
+    parts.push(`// ---- ${name} ----\n${strip(buf.toString('utf8'))}`);
+  }
+  return `(function () {\n${parts.join('\n')}\n})();\n`;
+}
+
 export function readWebAsset(name: string): Buffer | null {
   const sea = seaApi();
   if (sea) {
@@ -775,6 +805,12 @@ export function serve(
         return sendJson(200, { path: rel, content: fs.readFileSync(real, 'utf8') });
       }
       const file = url === '/' ? 'index.html' : url.slice(1);
+      // app.js はモジュールに分かれているので、まとめたものを返す
+      // (エクスポート HTML と同じ 1 本。経路を分けると片方だけ壊れても気付けない)
+      if (file === 'app.js') {
+        res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-store' });
+        return res.end(bundleViewerJs());
+      }
       const body = readWebAsset(file);
       if (body === null) return sendText(404, 'not found');
       const ext = path.extname(file);

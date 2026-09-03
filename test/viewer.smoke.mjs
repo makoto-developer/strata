@@ -59,8 +59,10 @@ globalThis.document = {
   addEventListener: () => {},
 };
 
-const src = fs.readFileSync(fileURLToPath(new URL('../web/app.js', import.meta.url)), 'utf8');
-await eval(src);
+// ビューアは view 単位のモジュールに分かれている。配るのと同じ 1 本にまとめてから評価する
+// (ブラウザ・エクスポート・このテストで別のものを食べさせない)
+const { bundleViewerJs } = await import('../src/server.ts');
+await eval(bundleViewerJs());
 
 const fail = (msg) => { console.error('✖ ' + msg); process.exitCode = 1; };
 const ok = (msg) => console.log('✓ ' + msg);
