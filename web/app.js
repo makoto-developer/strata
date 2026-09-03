@@ -1109,30 +1109,28 @@
       // 生エッジをトップレベルに集約(画面の展開状態に依存しない)。
       // 共有 proto/ ディレクトリ構成では RPC ノードが proto 側にぶら下がるため、
       // RPC への依存は「そのRPCを実装しているサービス」に付け替えて集計する
-      const implTopOf = (rpcId) => {
+      // 実装は 1 つとは限らない。1 つだけ採ると、選ばれなかったサービスの依存が消える
+      const implTopsOf = (rpcId) => {
         const impls = rpcImpls.get(rpcId);
-        return impls && impls.size > 0 ? chain([...impls][0])[0] : null;
+        return impls && impls.size > 0 ? [...new Set([...impls].map((i) => chain(i)[0]))] : [];
       };
-      const svcTopOfTarget = (toId) => {
+      const svcTopsOfTarget = (toId) => {
         const toNode = byId.get(toId);
         if (toNode && toNode.kind === 'rpc') {
-          const t = implTopOf(toId);
-          if (t) return t;
+          const t = implTopsOf(toId);
+          if (t.length > 0) return t;
         } else if (toNode && toNode.kind === 'proto') {
-          for (const kid of childrenOf.get(toId) || []) {
-            const t = implTopOf(kid);
-            if (t) return t;
-          }
+          const all = new Set();
+          for (const kid of childrenOf.get(toId) || []) for (const t of implTopsOf(kid)) all.add(t);
+          if (all.size > 0) return [...all];
         }
-        return chain(toId)[0];
+        return [chain(toId)[0]];
       };
       const outMap = new Map(); // topId -> {count, rpc, code, items:[{from,to,count,isRpc}]}
       const inMap = new Map();
       for (const e of model.edges) {
         if (e.kind === 'impl') continue;
         const tu = chain(e.from)[0];
-        const tv = svcTopOfTarget(e.to);
-        if (tu === tv || (tu !== n.id && tv !== n.id)) continue;
         const isRpc = e.kind === 'rpc' || e.kind === 'proto' || e.kind === 'http' || e.kind === 'graphql';
         const bump = (map, key) => {
           const cur = map.get(key) || { count: 0, rpc: 0, code: 0, items: [] };
@@ -1142,8 +1140,11 @@
           cur.items.push({ from: e.from, to: e.to, count: e.count, isRpc });
           map.set(key, cur);
         };
-        if (tu === n.id) bump(outMap, tv);
-        if (tv === n.id) bump(inMap, tu);
+        for (const tv of svcTopsOfTarget(e.to)) {
+          if (tu === tv || (tu !== n.id && tv !== n.id)) continue;
+          if (tu === n.id) bump(outMap, tv);
+          if (tv === n.id) bump(inMap, tu);
+        }
       }
       const DRILL_CAP = 30; // 1 サービスあたりの関数レベル表示上限
       const API_PICK_CAP = 60; // 図で追う API 一覧の表示上限(それ以上はカタログ側で探す)
@@ -1186,8 +1187,8 @@
       const ownRpcs = []; // 図タブで「どこから呼ばれているか」を選ぶための一覧
       for (const nn of model.nodes) {
         if (nn.kind !== 'rpc') continue;
-        const owner = implTopOf(nn.id) || chain(nn.id)[0]; // 実装サービス優先で帰属
-        if (owner !== n.id) continue;
+        const owners = implTopsOf(nn.id); // 実装サービス優先で帰属(複数なら全部)
+        if (!(owners.length > 0 ? owners : [chain(nn.id)[0]]).includes(n.id)) continue;
         rpcTotal++;
         if (nn.label.includes('.')) protoSvcNames.add(nn.label.slice(0, nn.label.indexOf('.')));
         const callerTops = new Set([...(rpcCallers.get(nn.id) || [])].map((c) => chain(c)[0]));
@@ -2766,20 +2767,20 @@
   function computeServiceGraph() {
     const implTopOf = (rpcId) => {
       const impls = rpcImpls.get(rpcId);
-      return impls && impls.size > 0 ? chain([...impls][0])[0] : null;
+      // 実装は複数ありうる。1 つだけ採ると、選ばれなかったサービスへの線が消える
+      return impls && impls.size > 0 ? [...new Set([...impls].map((i) => chain(i)[0]))] : [];
     };
-    const targetTop = (toId) => {
+    const targetTops = (toId) => {
       const node = byId.get(toId);
       if (node && node.kind === 'rpc') {
         const t = implTopOf(toId);
-        if (t) return t;
+        if (t.length > 0) return t;
       } else if (node && node.kind === 'proto') {
-        for (const kid of childrenOf.get(toId) || []) {
-          const t = implTopOf(kid);
-          if (t) return t;
-        }
+        const all = new Set();
+        for (const kid of childrenOf.get(toId) || []) for (const t of implTopOf(kid)) all.add(t);
+        if (all.size > 0) return [...all];
       }
-      return chain(toId)[0];
+      return [chain(toId)[0]];
     };
     const tops = (childrenOf.get('') || []).filter((id) => !state.structHidden.has(id));
     const topSet = new Set(tops);
@@ -2787,21 +2788,23 @@
     for (const e of model.edges) {
       if (e.kind === 'impl') continue;
       const a = chain(e.from)[0];
-      const b = targetTop(e.to);
-      if (a === b || !topSet.has(a) || !topSet.has(b)) continue;
-      const key = a + '\u0000' + b;
-      const cur = edgeMap.get(key) || { from: a, to: b, rpc: 0, http: 0, gql: 0, code: 0, viol: 0, edges: 0, rules: new Set() };
-      if (e.kind === 'rpc' || e.kind === 'proto') cur.rpc += e.count;
-      else if (e.kind === 'http') cur.http += e.count;
-      else if (e.kind === 'graphql') cur.gql += e.count;
-      else cur.code += e.count;
-      cur.edges++;
-      // 1 本の線は多数のエッジをまとめている。全部が違反とは限らないので本数で持つ
-      if (e.violates) {
-        cur.viol++;
-        cur.rules.add(e.violates);
+      // 実装が複数あるときは全部へ線を引く(どれが動くかは実行時に決まる)
+      for (const b of targetTops(e.to)) {
+        if (a === b || !topSet.has(a) || !topSet.has(b)) continue;
+        const key = a + '\u0000' + b;
+        const cur = edgeMap.get(key) || { from: a, to: b, rpc: 0, http: 0, gql: 0, code: 0, viol: 0, edges: 0, rules: new Set() };
+        if (e.kind === 'rpc' || e.kind === 'proto') cur.rpc += e.count;
+        else if (e.kind === 'http') cur.http += e.count;
+        else if (e.kind === 'graphql') cur.gql += e.count;
+        else cur.code += e.count;
+        cur.edges++;
+        // 1 本の線は多数のエッジをまとめている。全部が違反とは限らないので本数で持つ
+        if (e.violates) {
+          cur.viol++;
+          cur.rules.add(e.violates);
+        }
+        edgeMap.set(key, cur);
       }
-      edgeMap.set(key, cur);
     }
     return { tops, edges: [...edgeMap.values()] };
   }
@@ -2867,8 +2870,9 @@
     for (const n of model.nodes) {
       if (n.kind === 'rpc') {
         const impls = rpcImpls.get(n.id);
-        const owner = impls && impls.size > 0 ? chain([...impls][0])[0] : chain(n.id)[0];
-        rpcCount.set(owner, (rpcCount.get(owner) || 0) + 1);
+        // 実装が複数あるなら、その全部が「この API を公開している」
+        const owners = impls && impls.size > 0 ? new Set([...impls].map((i) => chain(i)[0])) : new Set([chain(n.id)[0]]);
+        for (const owner of owners) rpcCount.set(owner, (rpcCount.get(owner) || 0) + 1);
       } else if (n.kind === 'route' && !(n.meta && n.meta.external)) {
         const owner = chain(n.id)[0];
         routeCount.set(owner, (routeCount.get(owner) || 0) + 1);

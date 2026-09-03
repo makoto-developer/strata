@@ -836,6 +836,25 @@ try {
   }
 }
 
+// 1 つの RPC に実装が複数あるとき、依存を 1 つの実装に決め打ちしない
+{
+  const model = scan(fileURLToPath(new URL('./fixtures/patterns/generated-server', import.meta.url)));
+  const impls = model.edges.filter((e) => e.kind === 'impl' && e.from.endsWith('FooService.GetFoo'));
+  const m = computeServiceMetrics(model);
+  const by = (id) => m.find((x) => x.id === id);
+  if (impls.length === 2 && by('svc-a') && by('svc-c') && by('svc-a').ca === 1 && by('svc-c').ca === 1)
+    ok('metrics: 実装が複数ある RPC は、依存を全実装に帰属させる');
+  else
+    fail(
+      '複数実装の帰属が想定外: impl=' +
+        impls.length +
+        ' svc-a=' +
+        JSON.stringify(by('svc-a')?.ca) +
+        ' svc-c=' +
+        JSON.stringify(by('svc-c')?.ca),
+    );
+}
+
 // 自己完結 HTML(export)の健全性 §8.4
 {
   const html = exportHtml(model);
