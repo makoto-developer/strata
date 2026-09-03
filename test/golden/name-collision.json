@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 4,
+  "name": "name-collision",
+  "nodes": [
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user",
+      "label": "user",
+      "parent": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v1",
+      "label": "v1",
+      "parent": "proto/user",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v1/user.proto",
+      "label": "user.proto",
+      "parent": "proto/user/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 12,
+      "meta": {
+        "pkg": "acme.user.v1",
+        "services": [
+          "UserService"
+        ],
+        "goPackage": "example.com/platform/proto/user/v1",
+        "messages": {
+          "GetUserReq": 10,
+          "GetUserRes": 11
+        },
+        "file": "proto/user/v1/user.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/user/v1/user.proto#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "proto/user/v1/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v1/user.proto",
+        "line": 7,
+        "req": "GetUserReq",
+        "res": "GetUserRes"
+      }
+    },
+    {
+      "id": "services",
+      "label": "services",
+      "kind": "dir",
+      "lang": "go"
+    },
+    {
+      "id": "services/order",
+      "label": "order",
+      "parent": "services",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "services/order/internal",
+      "label": "internal",
+      "parent": "services/order",
+      "kind": "dir"
+    },
+    {
+      "id": "services/order/internal/api",
+      "label": "api",
+      "parent": "services/order/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 28,
+      "meta": {
+        "typeDefs": {
+          "Server": {
+            "f": "services/order/internal/api/api.go",
+            "l": 10
+          },
+          "LocalCache": {
+            "f": "services/order/internal/api/api.go",
+            "l": 25
+          }
+        }
+      }
+    },
+    {
+      "id": "services/order/internal/api#LocalCache.GetUser",
+      "label": "LocalCache.GetUser",
+      "parent": "services/order/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "services/order/internal/api/api.go",
+        "line": 27
+      }
+    },
+    {
+      "id": "services/order/internal/api#Server.Load",
+      "label": "Server.Load",
+      "parent": "services/order/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 7,
+      "meta": {
+        "file": "services/order/internal/api/api.go",
+        "line": 15,
+        "doc": "本物の呼び出し"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "services/order/internal/api",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "services/order/internal/api#Server.Load",
+      "to": "proto/user/v1/user.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "services/order/internal/api/api.go",
+          "l": 16
+        }
+      ],
+      "evidence": "name"
+    }
+  ],
+  "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 6,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 1,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 1,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

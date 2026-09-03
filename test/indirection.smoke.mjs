@@ -275,6 +275,34 @@ function scanWithout(dir, key) {
   else fail('自前ラッパー: 根拠なく繋いでいる');
 }
 
+// --- パターン K: RPC と同名だが無関係なメソッドが同じ package にある ---
+{
+  const model = scan(path.join(patternsDir, 'name-collision'));
+  const impl = model.edges.filter((e) => e.kind === 'impl' && e.to.includes('LocalCache'));
+  if (impl.length === 0) ok('同名メソッド: 無関係なキャッシュを実装として繋がない');
+  else fail('同名メソッド: LocalCache を RPC の実装にしている');
+  const calls = model.edges.filter((e) => e.kind === 'call' && e.to.includes('LocalCache'));
+  if (calls.length === 0) ok('同名メソッド: RPC 呼び出しを同名ローカルメソッドに吸わせない');
+  else fail('同名メソッド: 呼び出しが LocalCache に吸われている');
+  // 誤接続を消すために本物まで消していないことを確かめる(取りこぼしの検出)
+  if (rpcEdges(model).some((e) => e.to.endsWith('UserService.GetUser')))
+    ok('同名メソッド: 本物の呼び出しは残る');
+  else fail('同名メソッド: 本物の RPC 呼び出しまで消えている');
+}
+
+// --- パターン L: テストダブルが慣習外の場所(testsupport/)にある ---
+{
+  const model = scan(path.join(patternsDir, 'mock-location'));
+  const impl = model.edges.filter((e) => e.kind === 'impl');
+  // 埋め込みは本物なので、モデルとしては両方繋ぐのが正しい。
+  // 「どちらが本番か」はビューアの mock 除外(isMockNode)の仕事
+  if (impl.some((e) => e.to.includes('api#Server.GetUser'))) ok('モック配置: 本物の実装を繋ぐ');
+  else fail('モック配置: 本物の実装が繋がっていない');
+  if (impl.some((e) => e.to.includes('testsupport#FakeUserService.GetUser')))
+    ok('モック配置: にせ実装も構造的には繋ぐ(除外は表示側の責務)');
+  else fail('モック配置: 期待した検出結果でない');
+}
+
 // --- パターン J: 手書きの interface / モックを gRPC 呼び出しと誤認しない ---
 {
   const model = scan(path.join(patternsDir, 'handwritten-client'));

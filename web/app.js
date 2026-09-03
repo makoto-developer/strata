@@ -1363,8 +1363,10 @@ import { initDiagram } from './diagram.js';
   const artifactCount = protoNodes.filter((n) => n.kind === 'artifact').length;
   // mock 判定: パス片・ファイル名の mock/mocks、型名の Mock〜。
   // gomock(mock_foo.go / mocks/foo.go)と手書きの MockFooClient のどちらも拾う
-  const MOCK_PATH = /(^|[/_.-])mocks?([/_.-]|$)/i;
-  const MOCK_TYPE = /(^|[#./])Mock[A-Z0-9_]/;
+  // 慣習外の場所に置かれたテストダブルも拾う。実際に testsupport/FakeUserService が
+  // 本物の実装と同じ証拠で「UserService の実装」として並んでいた
+  const MOCK_PATH = /(^|[/_.-])(mocks?|fakes?|stubs?|doubles?|testsupport|testutils?|testhelpers?)([/_.-]|$)/i;
+  const MOCK_TYPE = /(^|[#./])(Mock|Fake|Stub|Spy|Dummy)[A-Z0-9_]|(Mock|Fake|Stub|Spy|Dummy)$/;
   function isMockNode(id) {
     if (MOCK_PATH.test(id) || MOCK_TYPE.test(id)) return true;
     const file = ((byId.get(id) || {}).meta || {}).file;

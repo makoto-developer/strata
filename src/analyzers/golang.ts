@@ -11,8 +11,32 @@ interface GoFunc {
   id: string;
   name: string;
   recv?: string;
+  /** 宣言の本文直前までの文字列(引数と戻り値)。RPC ハンドラらしさの判定に使う */
+  sig: string;
   bodyStart: number;
   bodyEnd: number;
+}
+
+/**
+ * gRPC のサーバハンドラらしいシグネチャか。
+ * 生成される server interface は (ctx context.Context, *Req) (*Res, error) の形になる。
+ * これを見ないと、RPC 名とたまたま同じ名前のメソッド(メモリキャッシュの GetUser 等)を
+ * 実装として繋いでしまう。実際にデモへ 1 メソッド足すだけで誤接続が出た。
+ */
+function looksLikeGrpcHandler(sig: string): boolean {
+  const afterRecv = sig.replace(/^func\s*\([^)]*\)\s*/, 'func '); // レシーバを落とす
+  const open = afterRecv.indexOf('(');
+  if (open < 0) return false;
+  const close = matchParen(afterRecv, open);
+  if (close < 0) return false;
+  const params = afterRecv.slice(open + 1, close);
+  const rets = afterRecv.slice(close + 1);
+  // 生成される server interface は (ctx, *Req) (*Res, error)。
+  // ストリーミングは ctx を取らず (stream X_FooServer) error になることもあるので、
+  // 「error を返す」ことに加えて「ctx を取る or ストリーム型を取る」で見る。
+  // ポインタ引数までは要求しない — 手書きの薄い実装で普通に外れるため
+  if (!/\berror\b/.test(rets)) return false;
+  return /\bcontext\.Context\b/.test(params) || /\b\w+(Server|Stream)\b/.test(params);
 }
 
 interface GoFileInfo {
@@ -335,7 +359,7 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
             ...(isMainPkg && !recv && name === 'main' ? { entry: 'main' } : {}),
           },
         });
-        functions.push({ id: funcId, name, recv, bodyStart: open, bodyEnd: close });
+        functions.push({ id: funcId, name, recv, sig: blanked.slice(m.index, open), bodyStart: open, bodyEnd: close });
         if (!recv && !funcIndex.has(name)) funcIndex.set(name, funcId);
         if (recv) {
           // 同名メソッドが複数レシーバに定義されている場合は曖昧(null)にする
@@ -370,7 +394,7 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
           loc: bodyLines + 1,
           meta: { file: wsRel, line: declLine, ...(doc ? { doc } : {}) },
         });
-        functions.push({ id: funcId, name, recv: undefined, bodyStart: open, bodyEnd: close });
+        functions.push({ id: funcId, name, recv: undefined, sig: blanked.slice(cm.index, open), bodyStart: open, bodyEnd: close });
         if (!funcIndex.has(name)) funcIndex.set(name, funcId);
       }
 
@@ -480,6 +504,9 @@ export function linkGo(ctx: Ctx, state: GoState): void {
     const pkgImplServices = ctx.goPkgImplServices.get(file.pkgId);
     const isImplMethod = (fn: GoFunc, service: string): boolean => {
       if (pkgImplServices) return pkgImplServices.has(service);
+      // 名前が一致するだけの無関係なメソッドを「実装」と見なすと、
+      // その proto がファイル全体で呼び出し解決から外れ、本物の呼び出しが消える
+      if (!looksLikeGrpcHandler(fn.sig)) return false;
       // stub/client 系フィールド経由で同名を呼ぶだけならラッパー。
       // (h.repo.GetUser のようにリポジトリへ同名フォワードする正当な実装は除外しない)
       const body = file.blanked.slice(fn.bodyStart, fn.bodyEnd + 1);
@@ -582,8 +609,11 @@ export function linkGo(ctx: Ctx, state: GoState): void {
           (info) => info.name === fn.name && fileProtoIds.has(info.protoId),
         );
         if (candidates.length === 1 && isImplMethod(fn, candidates[0].service)) {
-          // Unimplemented<Service>Server の埋め込みがあれば構造的、無ければ名前一致だけ
-          const strength = pkgImplServices?.has(candidates[0].service) ? 'structural' : 'name';
+          // Unimplemented<Service>Server の埋め込みがあれば構造的、無ければ名前一致だけ。
+          // 名前一致だけのときは、シグネチャが gRPC ハンドラの形であることも要求する
+          const structural = pkgImplServices?.has(candidates[0].service) === true;
+          if (!structural && !looksLikeGrpcHandler(fn.sig)) continue;
+          const strength = structural ? 'structural' : 'name';
           setEvidence(ctx.builder.addEdge(candidates[0].rpcId, fn.id, 'impl'), strength);
         }
       }
