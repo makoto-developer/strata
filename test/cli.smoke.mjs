@@ -889,6 +889,20 @@ try {
     clearCache(ws);
     if (readCache(ws, fp1) === null) ok('キャッシュ: 明示的に捨てられる');
     else fail('clearCache が効いていない');
+
+    // strata 自身の解析コードを直したら作り直す。版番号だけだと開発中は変わらず、
+    // 古い結果を返し続ける(実際にそれで取りこぼしを起こした)
+    const own = fileURLToPath(new URL('../src/scan.ts', import.meta.url));
+    const before = fs.statSync(own);
+    try {
+      const later = new Date(before.mtimeMs + 60_000);
+      fs.utimesSync(own, later, later);
+      const { fingerprint: freshFp } = await import('../src/modelcache.ts?tool-changed');
+      if (!sameFingerprint(fp2, freshFp(ws))) ok('キャッシュ: 解析コードを直すと指紋が変わる');
+      else fail('解析コードを直しても指紋が同じ(古い結果を返してしまう)');
+    } finally {
+      fs.utimesSync(own, before.atime, before.mtime); // リポジトリの状態を戻す
+    }
   } finally {
     if (prevCfg === undefined) delete process.env.STRATA_CONFIG_DIR;
     else process.env.STRATA_CONFIG_DIR = prevCfg;

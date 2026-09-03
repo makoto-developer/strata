@@ -3,9 +3,12 @@
 // serve は model.json のリクエストごとに解析し直していた。100 リポジトリのワークスペースで
 // 毎回 9 秒かかり、ブラウザを開き直すたびにその時間を払う。
 //
-// 有効性の判定は「指紋」の一致で行う。指紋は解析対象ファイルのパス・サイズ・更新時刻と
-// strata のバージョンから作る。ディレクトリを走査して stat するだけで中身は読まないので、
-// 本解析より 1〜2 桁速い。
+// 有効性の判定は「指紋」の一致で行う。指紋は解析対象ファイルのパス・サイズ・更新時刻に加え、
+// strata 自身の解析コードの状態からも作る。ディレクトリを走査して stat するだけで
+// 中身は読まないので、本解析より 1〜2 桁速い。
+//
+// 自分のソースを混ぜるのは、版番号だけだと開発中やソース実行で解析コードを直しても
+// 指紋が変わらず、古い結果を返し続けるため。実際にそれで取りこぼしを起こした。
 //
 // 指紋(小さい)とモデル(大きい)はファイルを分ける。判定は指紋だけ読めば済み、
 // 一致したときにモデル本体を 1 回だけ読む。
@@ -14,12 +17,45 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { SKIP_DIRS } from './context.ts';
 import { parseGraph, TOOL_VERSION, type Graph } from './model.ts';
 
+/**
+ * strata 自身の解析コードの状態。
+ *
+ * 版番号だけでは、開発中やソース実行(node src/cli.ts)で解析コードを直しても
+ * 指紋が変わらず、古い結果を返し続ける。実際にそれで「新しく足した項目が
+ * 出ない」という取りこぼしを起こした。自分のソースの更新時刻も指紋に混ぜる。
+ * パッケージ版(SEA)にはソースが無いので、その場合は版番号だけで十分
+ * (リリースごとに変わり、中身は不変なため)。
+ */
+function toolDigest(): string {
+  const hash = crypto.createHash('sha1').update(TOOL_VERSION);
+  try {
+    const srcDir = fileURLToPath(new URL('.', import.meta.url));
+    for (const dir of [srcDir, path.join(srcDir, '..', 'web')]) {
+      const walk = (d: string): void => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+          const abs = path.join(d, e.name);
+          if (e.isDirectory()) walk(abs);
+          else if (e.isFile()) {
+            const st = fs.statSync(abs);
+            hash.update(`${e.name} ${st.size} ${st.mtimeMs}\n`);
+          }
+        }
+      };
+      walk(dir);
+    }
+  } catch {
+    // ソースが無い(パッケージ版)。版番号だけで判定する
+  }
+  return hash.digest('hex').slice(0, 16);
+}
+
 /** 走査対象ファイルの要約。1 つでも変われば解析結果も変わりうる。 */
 export interface Fingerprint {
-  tool: string; // 解析ロジックが変われば作り直す
+  tool: string; // 解析ロジック(版 + 自身のソース)が変われば作り直す
   files: number;
   bytes: number;
   // パス・サイズ・更新時刻から作る。件数と合計サイズだけでは
@@ -88,7 +124,7 @@ export function fingerprint(rootAbs: string): Fingerprint {
     }
   };
   visit(root, 0);
-  return { tool: TOOL_VERSION, files, bytes, digest: hash.digest('hex') };
+  return { tool: toolDigest(), files, bytes, digest: hash.digest('hex') };
 }
 
 /** 指紋が同じ = 解析し直しても同じ結果になるとみなせる。 */
