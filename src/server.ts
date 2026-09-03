@@ -12,6 +12,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 import { diffModels } from './diff.ts';
+import { fingerprint, readCache, sameFingerprint, writeCache, type Fingerprint } from './modelcache.ts';
 import { repoRootOf, scanAtRef } from './gitref.ts';
 import { parseGraph } from './model.ts';
 import type { Graph } from './model.ts';
@@ -269,11 +270,41 @@ export function serve(
     }
   }
 
+  // 解析結果のキャッシュ。ブラウザを開き直すたびに全解析していた
+  // (100 リポジトリで毎回 9 秒)。指紋(パス・サイズ・更新時刻)が同じなら使い回す。
+  // メモリとディスクの 2 段: メモリは同一プロセス内、ディスクは再起動をまたぐ
+  const memCache = new Map<string, { fp: Fingerprint; graph: Graph }>();
+
   const modelFor = (input: string): Graph => {
     if (input.endsWith('.json') && fs.existsSync(input) && fs.statSync(input).isFile()) {
       return parseGraph(fs.readFileSync(input, 'utf8'), input);
     }
-    return opts.ref ? scanAtRef(input, opts.ref) : scan(input);
+    // --ref は作業ツリーではなくその ref を見るので、指紋(作業ツリー)では判定できない
+    if (opts.ref) return scanAtRef(input, opts.ref);
+
+    const abs = path.resolve(input);
+    const fp = fingerprint(abs);
+    const hit = memCache.get(abs);
+    if (hit && sameFingerprint(hit.fp, fp)) return hit.graph;
+    const cached = readCache(abs, fp);
+    if (cached) {
+      memCache.set(abs, { fp, graph: cached });
+      return cached;
+    }
+    const started = Date.now();
+    const graph = scan(input);
+    // 解析中にファイルが変わっていたら、その結果は「どの状態のものか」が言えない
+    if (sameFingerprint(fp, fingerprint(abs))) {
+      memCache.set(abs, { fp, graph });
+      writeCache(abs, fp, graph);
+    } else {
+      memCache.delete(abs);
+      console.log('解析中にファイルが変更されたため、この結果はキャッシュしません');
+    }
+    if (Date.now() - started > 3000) {
+      console.log(`解析に ${((Date.now() - started) / 1000).toFixed(1)} 秒かかりました(次回からはキャッシュを使います)`);
+    }
+    return graph;
   };
 
   /** `?p=` を解決する。登録済みプロジェクト以外は拒否(403 の代わりに null)。 */

@@ -855,6 +855,48 @@ try {
     );
 }
 
+// モデルのキャッシュ: 指紋が一致するときだけ使い回す
+{
+  const prevCfg = process.env.STRATA_CONFIG_DIR;
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-cache-'));
+  process.env.STRATA_CONFIG_DIR = cfg;
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-cache-ws-'));
+  fs.writeFileSync(path.join(ws, 'go.mod'), 'module example.com/x\n\ngo 1.22\n');
+  fs.writeFileSync(path.join(ws, 'main.go'), 'package main\n\nfunc main() {}\n');
+  try {
+    // import は動的にする(環境変数を差し替えてから読ませるため)
+    const { fingerprint, sameFingerprint, readCache, writeCache, clearCache } = await import(
+      '../src/modelcache.ts?cache-test'
+    );
+    const fp1 = fingerprint(ws);
+    const model = scan(ws);
+    if (readCache(ws, fp1) === null) ok('キャッシュ: 保存前は空');
+    else fail('保存していないのにキャッシュが返った');
+
+    writeCache(ws, fp1, model);
+    const hit = readCache(ws, fp1);
+    if (hit && hit.nodes.length === model.nodes.length) ok('キャッシュ: 指紋が一致すれば読み戻せる');
+    else fail('キャッシュを読み戻せない');
+
+    // 中身を変えたら指紋が変わり、古いキャッシュは使われない
+    fs.writeFileSync(path.join(ws, 'main.go'), 'package main\n\nfunc main() { helper() }\nfunc helper() {}\n');
+    const fp2 = fingerprint(ws);
+    if (!sameFingerprint(fp1, fp2)) ok('キャッシュ: ファイルを変えると指紋が変わる');
+    else fail('ファイルを変えても指紋が同じ(古い結果を返してしまう)');
+    if (readCache(ws, fp2) === null) ok('キャッシュ: 指紋が違えば使わない');
+    else fail('指紋が違うのにキャッシュを返した');
+
+    clearCache(ws);
+    if (readCache(ws, fp1) === null) ok('キャッシュ: 明示的に捨てられる');
+    else fail('clearCache が効いていない');
+  } finally {
+    if (prevCfg === undefined) delete process.env.STRATA_CONFIG_DIR;
+    else process.env.STRATA_CONFIG_DIR = prevCfg;
+    fs.rmSync(cfg, { recursive: true, force: true });
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+}
+
 // 自己完結 HTML(export)の健全性 §8.4
 {
   const html = exportHtml(model);
