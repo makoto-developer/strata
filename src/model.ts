@@ -66,6 +66,32 @@ export interface GNode {
   meta?: NodeMeta;
 }
 
+/**
+ * その線を引いた根拠の強さ。
+ *
+ * 全部の線が同じ見た目だと、「生成コードの埋め込みという構造的な証拠で引いた線」と
+ * 「名前が一致しただけの線」を利用者が区別できない。後者は別組織の同名 API に
+ * 化けうるので、CI ゲートに使う前に見分けられる必要がある。
+ *
+ * - exact      … package 込みの完全修飾名が一致した(生成物を特定したうえで)
+ * - configured … 利用者が設定で明示した対応
+ * - structural … 構造的な証拠(解決済み import・生成コードの Unimplemented 埋め込み・
+ *                コンストラクタで掴んだクライアント)
+ * - name       … 名前が一致しただけ。いちばん弱い
+ */
+export type EdgeEvidence = 'exact' | 'configured' | 'structural' | 'name';
+
+/** 強い順。1 本の線に複数の根拠が集まったら、強いほうを残す。 */
+const EVIDENCE_RANK: Record<EdgeEvidence, number> = { exact: 3, configured: 2, structural: 1, name: 0 };
+
+/** 既存の根拠より強ければ差し替える(弱いほうで上書きしない)。 */
+export function setEvidence(edge: GEdge | undefined, level: EdgeEvidence): void {
+  if (!edge) return;
+  if (edge.evidence === undefined || EVIDENCE_RANK[level] > EVIDENCE_RANK[edge.evidence]) {
+    edge.evidence = level;
+  }
+}
+
 export interface GEdge {
   from: string;
   to: string;
@@ -77,6 +103,8 @@ export interface GEdge {
   via?: string[];
   /** forbidden ルールに一致したときのルール名(ビューアが図で色を変える。正本は strata check) */
   violates?: string;
+  /** その線を引いた根拠の強さ(rpc / impl のみ。import / call は構文そのものなので付けない) */
+  evidence?: EdgeEvidence;
 }
 
 /** 未解決参照の理由。UI とドキュメントの表示文言はこのキーで引く。 */
@@ -118,6 +146,9 @@ export interface Thresholds {
   maxUnresolved?: number; // 未解決(import + RPC 呼び出し)の上限
   maxAmbiguous?: number; // 候補が複数で繋がなかった箇所の上限
   failOnReadError?: boolean; // 読めなかったファイルが 1 つでもあれば fail
+  // ルール判定に使う線の下限。名前が一致しただけの線で CI を落とすのは乱暴なので、
+  // 'structural' 以上に限る、といった指定ができる(既定は全部の線を見る)
+  ruleMinEvidence?: EdgeEvidence;
 }
 
 /**
@@ -190,8 +221,12 @@ export function parseGraph(text: string, source: string): Graph {
         `strata scan で生成した model.json を渡してください。`,
     );
   }
-  // 任意フィールドの欠落を埋めて後段の参照を安全にする
+  // 任意フィールドの欠落を埋めて後段の参照を安全にする。
+  // ただし列挙したものだけを返すと、後から足したフィールドが
+  // ディスク経由(キャッシュ / model.json)で黙って消える。実際に coverage が消え、
+  // ビューアからバッジが無くなった。元のオブジェクトを土台にして、必須項目だけ正規化する
   return {
+    ...(g as Graph),
     tool: g.tool,
     name: typeof g.name === 'string' ? g.name : '',
     root: typeof g.root === 'string' ? g.root : '',

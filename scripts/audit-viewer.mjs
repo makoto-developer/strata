@@ -283,6 +283,12 @@ if (firstApi) {
   await page.waitForTimeout(700);
   const flow = ((await text('#apiflow')) || '').trim();
   record('API: フロー表示', flow !== '', flow === '' ? 'クリックしてもフローが空' : '');
+  // 線を引いた根拠。全部が同じ見た目だと、強い証拠と名前一致を区別できない
+  const ev = await page.evaluate(() => {
+    const chips = [...document.querySelectorAll('#apiflow .evchip')];
+    return { n: chips.length, tip: chips[0] ? chips[0].title.length : 0 };
+  });
+  record('API: 線の根拠(確信度)が出る', ev.n > 0 && ev.tip > 5, `${ev.n} 個`);
 } else {
   record('API: フロー表示', false, '[data-rpc] が見つからない');
 }

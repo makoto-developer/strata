@@ -836,6 +836,37 @@ try {
   }
 }
 
+// モデルをディスク経由で読んでもフィールドが落ちない
+// (parseGraph が列挙したものだけ返していて、後から足した coverage が黙って消えた)
+{
+  const model = scan(demoDir);
+  const back = parseGraph(JSON.stringify(model), '(test)');
+  const lost = Object.keys(model).filter((k) => back[k] === undefined);
+  if (lost.length === 0) ok('モデル: JSON を経由してもフィールドが落ちない');
+  else fail('往復で消えたフィールド: ' + lost.join(', '));
+  if (back.coverage && back.coverage.files.read === model.coverage.files.read)
+    ok('モデル: 解析台帳が往復しても保たれる');
+  else fail('coverage が往復で壊れた');
+}
+
+// 名前が一致しただけの線は弱い根拠として印を付け、ルール判定から外せる
+{
+  const model = scan(demoDir);
+  const weak = model.edges.filter((e) => e.evidence === 'name');
+  if (weak.length > 0) ok(`根拠: 名前一致だけの線を name として印を付ける(${weak.length} 本)`);
+  else fail('弱い根拠の線が 1 本も印されていない');
+  const unmarked = model.edges.filter((e) => (e.kind === 'rpc' || e.kind === 'impl') && !e.evidence);
+  if (unmarked.length === 0) ok('根拠: rpc / impl の線はすべて分類されている');
+  else fail('未分類の線がある: ' + JSON.stringify(unmarked.slice(0, 3).map((e) => `${e.kind} ${e.from}`)));
+
+  // ルール判定の下限を上げると、弱い線は違反にしない
+  const rules = [{ name: 'no-proto', from: '**/gateway', to: '**/proto' }];
+  const all = checkRules(model, rules).length;
+  const strong = checkRules(model, rules, 'structural').length;
+  if (all > strong) ok(`根拠: ruleMinEvidence で弱い線をルール判定から外せる(${all} → ${strong})`);
+  else fail(`ruleMinEvidence が効いていない(${all} → ${strong})`);
+}
+
 // 1 つの RPC に実装が複数あるとき、依存を 1 つの実装に決め打ちしない
 {
   const model = scan(fileURLToPath(new URL('./fixtures/patterns/generated-server', import.meta.url)));

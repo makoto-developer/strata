@@ -81,7 +81,8 @@
       "from": "proto/inventory.proto#InventoryService.Reserve",
       "to": "service#server.Reserve",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "service",

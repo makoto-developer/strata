@@ -16,6 +16,7 @@
 import * as path from 'node:path';
 import { chainBase, type Ctx } from '../context.ts';
 import { countLines, makeLineFinder, matchBrace } from '../lex.ts';
+import { setEvidence } from '../model.ts';
 import {
   buildFuncIndex,
   buildShortNameIndex,
@@ -272,7 +273,8 @@ export function detectGraphql(ctx: Ctx): void {
   const funcByLabel = buildShortNameIndex(ctx, true);
   const linkImpl = (rootKind: 'query' | 'mutation' | 'subscription', name: string, funcId: string): void => {
     const cands = byName.get(`${rootKind}:${name.toLowerCase()}`) ?? [];
-    if (cands.length === 1) ctx.builder.addEdge(cands[0].id, funcId, 'impl');
+    // リゾルバの登録から引く。構造的な証拠
+    if (cands.length === 1) setEvidence(ctx.builder.addEdge(cands[0].id, funcId, 'impl'), 'structural');
   };
 
   for (const project of ctx.projects) {

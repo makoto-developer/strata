@@ -4,6 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chainBase, readFileText, type Ctx, type Project } from '../context.ts';
+import { setEvidence } from '../model.ts';
 import { countLines, leadingComment, makeLineFinder, matchBrace, stripSource } from '../lex.ts';
 
 interface GoFunc {
@@ -522,7 +523,8 @@ export function linkGo(ctx: Ctx, state: GoState): void {
               if (funcId) ctx.builder.addEdge(fn.id, funcId, 'call', 1, siteAt(m.index));
             } else {
               const rpc = ctx.rpcOfProto.get(target.id)?.get(member);
-              if (rpc) ctx.builder.addEdge(fn.id, rpc.rpcId, 'rpc', 1, siteAt(m.index));
+              // 別名が実在の proto を指しているうえでのメソッド一致 = 構造的な証拠
+              if (rpc) setEvidence(ctx.builder.addEdge(fn.id, rpc.rpcId, 'rpc', 1, siteAt(m.index)), 'structural');
               else if (!/^New\w*Client$/.test(member)) ctx.builder.addEdge(fn.id, target.id, 'proto', 1, siteAt(m.index));
             }
             continue;
@@ -537,7 +539,8 @@ export function linkGo(ctx: Ctx, state: GoState): void {
             !implementedProtos.has(info.protoId),
         );
         if (candidates.length === 1) {
-          ctx.builder.addEdge(fn.id, candidates[0].rpcId, 'rpc', 1, siteAt(m.index));
+          // 名前の一致だけ。別 package の同名 API に化けうる弱い根拠
+          setEvidence(ctx.builder.addEdge(fn.id, candidates[0].rpcId, 'rpc', 1, siteAt(m.index)), 'name');
           continue;
         }
         if (candidates.length > 1) {
@@ -579,7 +582,9 @@ export function linkGo(ctx: Ctx, state: GoState): void {
           (info) => info.name === fn.name && fileProtoIds.has(info.protoId),
         );
         if (candidates.length === 1 && isImplMethod(fn, candidates[0].service)) {
-          ctx.builder.addEdge(candidates[0].rpcId, fn.id, 'impl');
+          // Unimplemented<Service>Server の埋め込みがあれば構造的、無ければ名前一致だけ
+          const strength = pkgImplServices?.has(candidates[0].service) ? 'structural' : 'name';
+          setEvidence(ctx.builder.addEdge(candidates[0].rpcId, fn.id, 'impl'), strength);
         }
       }
     }

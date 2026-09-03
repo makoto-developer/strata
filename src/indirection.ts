@@ -21,6 +21,7 @@ import {
 } from './generated-artifact.ts';
 import { addUnresolved, type Ctx, type IndirectionPattern, type RpcCallEvidence, type RpcInfo } from './context.ts';
 import { globToRegex } from './path-glob.ts';
+import { setEvidence, type EdgeEvidence } from './model.ts';
 
 /**
  * RPC 名の索引。完全修飾(package 込み)を第一のキーにし、短名は生成物を特定できないときの
@@ -211,6 +212,8 @@ function resolveByPattern(
 interface Resolution {
   info: RpcInfo;
   via: string[];
+  /** どの経路で解けたか。線の強さとして残し、ビューアと check が見分けられるようにする */
+  evidence: EdgeEvidence;
 }
 
 /** 1 件の証拠を解決する。決め手が無ければ null(未解決として残す)。 */
@@ -224,7 +227,8 @@ function resolveEvidence(
   for (const artifact of matched) {
     for (const m of artifact.methods.filter((x) => methodMatches(x, ev))) {
       const candidates = index.byFull.get(fullRpcName(m)) ?? [];
-      if (candidates.length === 1) return { info: candidates[0], via: [artifact.id] };
+      // 生成物を特定したうえで package 込みの完全修飾が一意 = いちばん強い
+      if (candidates.length === 1) return { info: candidates[0], via: [artifact.id], evidence: 'exact' };
     }
   }
   // 生成物を特定できたのに完全修飾で解けないときは、別 package の同名 API の可能性がある。繋がない
@@ -232,7 +236,7 @@ function resolveEvidence(
   // 明示設定は短名より先に試す。短名が曖昧なときこそ patterns で決着させたいため
   for (const pattern of ctx.config.indirection?.patterns ?? []) {
     const info = resolveByPattern(ctx, pattern, ev, index);
-    if (info) return { info, via: [] };
+    if (info) return { info, via: [], evidence: 'configured' }; // 利用者が明示した対応
   }
   const short = index.byShort.get(`${ev.service}.${ev.method}`) ?? [];
   // 型注釈だけの束縛でも、修飾子の import が proto に解決できるならその proto に限って引く
@@ -241,10 +245,11 @@ function resolveEvidence(
     const protoId = ev.qualifierPath === undefined ? undefined : ctx.protoGoPackage.get(ev.qualifierPath);
     if (protoId === undefined) return null;
     const scoped = short.filter((i) => i.protoId === protoId);
-    return scoped.length === 1 ? { info: scoped[0], via: [] } : null;
+    // 型注釈の修飾子が実在の proto を指している = 構造的な証拠
+    return scoped.length === 1 ? { info: scoped[0], via: [], evidence: 'structural' } : null;
   }
   // 短名だけの一致は弱い証拠。生成クライアントのコンストラクタで掴んだ呼び出しに限る
-  return short.length === 1 ? { info: short[0], via: [] } : null;
+  return short.length === 1 ? { info: short[0], via: [], evidence: 'name' } : null;
 }
 
 function hintFor(ev: RpcCallEvidence, index: RpcIndex, hadArtifact: boolean): string {
@@ -357,7 +362,8 @@ function linkServerImpls(ctx: Ctx, index: RpcIndex): number {
     for (const owner of owners) {
       const funcId = `${owner}.${key.slice(dot + 1)}`;
       if (!ctx.builder.get(funcId) || existing.has(`${infos[0].rpcId}\u0000${funcId}`)) continue;
-      ctx.builder.addEdge(infos[0].rpcId, funcId, 'impl');
+      // 生成コードの Unimplemented<Service>Server 埋め込みという構造的な証拠
+      setEvidence(ctx.builder.addEdge(infos[0].rpcId, funcId, 'impl'), 'structural');
       existing.add(`${infos[0].rpcId}\u0000${funcId}`);
       linked++;
     }
@@ -370,6 +376,7 @@ function linkResolved(ctx: Ctx, ev: RpcCallEvidence, res: Resolution): void {
   const site = { f: ev.file, l: ev.line };
   for (const from of [ev.from, ...(ev.funcId ? [ev.funcId] : [])]) {
     const edge = ctx.builder.addEdge(from, res.info.rpcId, 'rpc', 1, site);
+    setEvidence(edge, res.evidence);
     if (!edge || res.via.length === 0) continue;
     // 同じ from/to のエッジは 1 本にまとまるので、経由地は上書きせず足し合わせる
     edge.via = [...new Set([...(edge.via ?? []), ...res.via])].sort();

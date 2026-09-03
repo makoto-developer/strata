@@ -34,6 +34,7 @@ const HELP = `Strata — 多言語・マイクロサービス対応の依存関�
                 [dir] --ref <base>..<head>  2 つの git ref を直接比較(head 省略で作業ツリー)
   strata trace  [dir|model.json] <関数名/ID> [--up] [--depth N] コールツリーを表示
   strata doctor [dir|model.json]           解析台帳(どこまで見えているか)を表示
+  strata explain [dir|model.json] <名前/ID>  その線をなぜ引いたか(根拠・確信度・該当行)を表示
   strata init   [dir] [--force]            strata.config.json の雛形を作成
   strata --version                         バージョンを表示(不具合報告時に添えてください)
 
@@ -72,6 +73,14 @@ function parseArgs(argv: string[]): Args {
   }
   return args;
 }
+
+/** 根拠の強さの説明。弱いものほど、鵜呑みにしてはいけない。 */
+const EVIDENCE_LABEL: Record<string, string> = {
+  exact: '完全修飾名の一致(生成物を特定したうえで) — 強い',
+  configured: '設定で明示された対応',
+  structural: '構造的な証拠(解決済み import / 生成コードの埋め込み / 登録)',
+  name: '名前が一致しただけ — 弱い(別 package の同名 API の可能性)',
+};
 
 /** 「見えなかったと分かっている量」を 1 行で。率は構成で分母が変わるので出さない。 */
 function coverageLine(model: Graph): string {
@@ -308,6 +317,46 @@ function main(): void {
   }
 
   switch (command) {
+    case 'explain': {
+      const model = loadModel(args.positional[0], refOf(args));
+      const q = (args.positional[1] ?? args.positional[0] ?? '').toLowerCase();
+      if (q === '') {
+        console.error('対象を指定してください: strata explain [dir] <RPC 名や ID の一部>');
+        process.exitCode = 1;
+        break;
+      }
+      const byId = new Map(model.nodes.map((n) => [n.id, n]));
+      const label = (id: string): string => byId.get(id)?.label ?? id;
+      const hit = (id: string): boolean => id.toLowerCase().includes(q) || label(id).toLowerCase().includes(q);
+      const targets = model.nodes.filter((n) => hit(n.id));
+      if (targets.length === 0) {
+        console.error(`「${q}」に一致するノードがありません`);
+        process.exitCode = 1;
+        break;
+      }
+      for (const n of targets.slice(0, 5)) {
+        console.log(`\n${n.kind} ${n.label}`);
+        console.log(`  ${n.id}`);
+        const shown = model.edges.filter((e) => e.from === n.id || e.to === n.id);
+        if (shown.length === 0) {
+          console.log('  この解析では、繋がっている線がありません');
+          continue;
+        }
+        for (const e of shown.slice(0, 40)) {
+          const dir = e.from === n.id ? '→' : '←';
+          const other = e.from === n.id ? e.to : e.from;
+          const why = e.evidence ? EVIDENCE_LABEL[e.evidence] : '構文そのもの(import / 呼び出し)';
+          const sites = (e.sites ?? []).map((s) => `${s.f}:${s.l}`).join(', ');
+          console.log(`  ${dir} ${e.kind.padEnd(9)} ${label(other)}`);
+          console.log(`      根拠: ${why}${e.violates ? ` / 禁止依存 [${e.violates}]` : ''}`);
+          if (sites) console.log(`      該当行: ${sites}`);
+          if (e.via && e.via.length > 0) console.log(`      経由: ${e.via.map(label).join(' → ')}`);
+        }
+        if (shown.length > 40) console.log(`  …他 ${shown.length - 40} 本`);
+      }
+      if (targets.length > 5) console.log(`\n…他 ${targets.length - 5} 個のノードが一致しました(絞り込んでください)`);
+      break;
+    }
     case 'doctor': {
       const model = loadModel(args.positional[0], refOf(args));
       const c = model.coverage;
@@ -409,7 +458,7 @@ function main(): void {
     }
     case 'check': {
       const model = loadModel(args.positional[0], refOf(args));
-      const violations = checkRules(model, model.rules);
+      const violations = checkRules(model, model.rules, model.thresholds?.ruleMinEvidence);
       // SARIF 出力(GitHub Code Scanning 連携)。テキスト出力の代わりに構造化して出す
       if (args.options.has('sarif')) {
         const cycles = findCycles(model);

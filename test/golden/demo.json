@@ -1282,7 +1282,8 @@
           "f": "federation/src/resolvers.ts",
           "l": 8
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "federation/src/server.ts",
@@ -1340,7 +1341,8 @@
           "f": "gateway/internal/client/user.go",
           "l": 17
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "gateway/internal/handler",
@@ -1364,7 +1366,8 @@
           "f": "gateway/internal/handler/handler.go",
           "l": 31
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "gateway/internal/handler#Gateway.handleUser",
@@ -1376,7 +1379,8 @@
           "f": "gateway/internal/handler/handler.go",
           "l": 27
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "gateway/internal/handler#Gateway.route",
@@ -1418,7 +1422,8 @@
       "from": "gql:federation/schema.graphql#Query.user",
       "to": "federation/src/resolvers.ts#user",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "proto/order/v1/order.proto",
@@ -1430,37 +1435,43 @@
       "from": "proto/order/v1/order.proto#OrderService.ListOrders",
       "to": "services/order/internal/api#Server.ListOrders",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "name"
     },
     {
       "from": "proto/user/v1/user.proto#UserService.GetUser",
       "to": "services/user/internal/handler#Server.GetUser",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "name"
     },
     {
       "from": "proto/user/v1/user.proto#UserService.ListUsers",
       "to": "services/user/internal/handler#Server.ListUsers",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "name"
     },
     {
       "from": "route:gateway/internal/httpapi#GET /api/users/{}",
       "to": "gateway/internal/httpapi#Server.handleGetUser",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "route:gateway/internal/httpapi#POST /api/orders",
       "to": "gateway/internal/httpapi#Server.handleCreateOrder",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "route:gateway/internal/httpapi#POST /webhooks/payment",
       "to": "gateway/internal/httpapi#Server.handlePaymentWebhook",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "services/order",
@@ -1514,7 +1525,8 @@
           "f": "services/order/internal/api/api.go",
           "l": 24
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "services/order/internal/api#Server.warmup",
@@ -1526,7 +1538,8 @@
           "f": "services/order/internal/api/api.go",
           "l": 20
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "services/order/internal/notify#FetchUser",
@@ -1700,7 +1713,8 @@
           "f": "web/portal.ex",
           "l": 11
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "webapp/src/gqlclient.ts",

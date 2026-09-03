@@ -207,19 +207,22 @@
       "from": "proto-defs/foo/v1/foo.proto#BarService.Ping",
       "to": "svc-a/src#FooServer.Ping",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "proto-defs/foo/v1/foo.proto#FooService.GetFoo",
       "to": "svc-a/src#FooServer.GetFoo",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "proto-defs/foo/v1/foo.proto#FooService.GetFoo",
       "to": "svc-c#AltFooServer.GetFoo",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "svc-b",
@@ -232,6 +235,7 @@
           "l": 15
         }
       ],
+      "evidence": "exact",
       "via": [
         "artifact:client-lib/foo/v1"
       ]
@@ -247,6 +251,7 @@
           "l": 15
         }
       ],
+      "evidence": "exact",
       "via": [
         "artifact:client-lib/foo/v1"
       ]

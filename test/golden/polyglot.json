@@ -224,7 +224,8 @@
           "f": "node-app/search.ts",
           "l": 10
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "node-app/search.ts#searchTitles",
@@ -236,19 +237,22 @@
           "f": "node-app/search.ts",
           "l": 10
         }
-      ]
+      ],
+      "evidence": "name"
     },
     {
       "from": "proto/search/v1/search.proto#SearchService.Query",
       "to": "go-impl#server.Query",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "proto/search/v1/search.proto#SearchService.Suggest",
       "to": "go-impl#server.Suggest",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "py-worker",
@@ -260,7 +264,8 @@
           "f": "py-worker/reindex.py",
           "l": 9
         }
-      ]
+      ],
+      "evidence": "name"
     }
   ],
   "warnings": [

@@ -143,7 +143,8 @@
           "f": "gateway/gateway.go",
           "l": 17
         }
-      ]
+      ],
+      "evidence": "structural"
     },
     {
       "from": "gateway#Gateway.ResolveAccount",
@@ -155,19 +156,22 @@
           "f": "gateway/gateway.go",
           "l": 17
         }
-      ]
+      ],
+      "evidence": "structural"
     },
     {
       "from": "proto/api.proto#PublicService.ResolveAccount",
       "to": "gateway#Gateway.ResolveAccount",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "proto/api.proto#UserService.GetUser",
       "to": "user#server.GetUser",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "user",

@@ -18,6 +18,7 @@
 
 import type { Ctx } from '../context.ts';
 import { makeLineFinder, matchBrace, stripSource } from '../lex.ts';
+import { setEvidence } from '../model.ts';
 import {
   buildFuncIndex,
   buildShortNameIndex,
@@ -501,7 +502,8 @@ export function detectHttp(ctx: Ctx): void {
       });
       if (narrowed.length === 1) candidates = narrowed;
     }
-    if (candidates.length === 1) ctx.builder.addEdge(id, candidates[0], 'impl');
+    // ルート登録の引数からハンドラを引く。登録という構造的な証拠
+    if (candidates.length === 1) setEvidence(ctx.builder.addEdge(id, candidates[0], 'impl'), 'structural');
   }
 
   // webhook 受信口には外部からの入りを表す辺を張る

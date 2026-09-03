@@ -58,8 +58,33 @@ function describe(expected, actual) {
     for (const x of list.slice(0, 8)) lines.push(`      ${x}`);
     if (list.length > 8) lines.push(`      …他 ${list.length - 8} 件`);
   }
-  // ノード・エッジ・警告が同じでも中身(meta や count)が違うことはある
-  if (lines.length === 0) lines.push('    ノード・エッジ・警告の集合は同じですが、中身(meta / count / sites)が違います');
+  // 集合が同じでも中身(meta / count / evidence / sites)が違うことはある。
+  // 「中身が違います」だけでは原因を追えないので、どの項目がどう変わったかまで出す
+  if (lines.length === 0) {
+    const idx = (arr, f) => new Map(arr.map((x) => [f(x), x]));
+    const diffFields = (a, b) => {
+      const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])];
+      return keys
+        .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]))
+        .map((k) => `${k}: ${JSON.stringify(a[k])} → ${JSON.stringify(b[k])}`);
+    };
+    const changes = [];
+    for (const [label, ex, ac, f] of [
+      ['ノード', expected.nodes, actual.nodes, (n) => n.id],
+      ['エッジ', expected.edges, actual.edges, key],
+    ]) {
+      const em = idx(ex, f);
+      for (const item of ac) {
+        const before = em.get(f(item));
+        if (!before) continue;
+        const fields = diffFields(before, item);
+        if (fields.length > 0) changes.push(`${label} ${f(item)}  ${fields.join(' / ')}`);
+      }
+    }
+    lines.push(`    集合は同じですが中身が違います(${changes.length} 件):`);
+    for (const c of changes.slice(0, 6)) lines.push(`      ${c}`);
+    if (changes.length > 6) lines.push(`      …他 ${changes.length - 6} 件`);
+  }
   return lines.join('\n');
 }
 

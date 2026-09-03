@@ -246,9 +246,9 @@ import { initDiagram } from './diagram.js';
   for (const e of model.edges) {
     if (!CALL_KINDS.has(e.kind)) continue;
     if (!callAdjDown.has(e.from)) callAdjDown.set(e.from, []);
-    callAdjDown.get(e.from).push({ to: e.to, kind: e.kind, sites: e.sites });
+    callAdjDown.get(e.from).push({ to: e.to, kind: e.kind, sites: e.sites, evidence: e.evidence });
     if (!callAdjUp.has(e.to)) callAdjUp.set(e.to, []);
-    callAdjUp.get(e.to).push({ to: e.from, kind: e.kind, sites: e.sites });
+    callAdjUp.get(e.to).push({ to: e.from, kind: e.kind, sites: e.sites, evidence: e.evidence });
   }
   // 木は分岐数の深さ乗で膨らむ。実測で分岐 3・深さ 12 が 240 万ノードになり、
   // そのまま DOM にすると固まる。総ノード数で頭を打たせて、打ち切りは … で示す
@@ -257,11 +257,11 @@ import { initDiagram } from './diagram.js';
   function traceTree(focusId, dir, maxDepth, opts = {}) {
     const adj = dir === 'up' ? callAdjUp : callAdjDown;
     let made = 0;
-    const build = (id, path, depth, kind, sites) => {
+    const build = (id, path, depth, kind, sites, evidence) => {
       made++;
-      if (path.has(id)) return { id, kind, sites, cycle: true, children: [] };
+      if (path.has(id)) return { id, kind, sites, evidence, cycle: true, children: [] };
       if (depth > maxDepth || made > TRACE_MAX_NODES)
-        return { id, kind, sites, cycle: false, children: [], truncated: true };
+        return { id, kind, sites, evidence, cycle: false, children: [], truncated: true };
       path.add(id);
       // 兄弟は「親の中での呼び出し行順」に並べる(=コードを上から読む順)。
       // 呼び出し位置が無いエッジ(import 等)は後ろに名前順で置く
@@ -288,9 +288,9 @@ import { initDiagram } from './diagram.js';
           if (la !== lb) return la - lb;
           return a.to < b.to ? -1 : 1;
         })
-        .map((n) => build(n.to, path, depth + 1, n.kind, n.sites));
+        .map((n) => build(n.to, path, depth + 1, n.kind, n.sites, n.evidence));
       path.delete(id);
-      return { id, kind, sites, cycle: false, children };
+      return { id, kind, sites, evidence, cycle: false, children };
     };
     return build(focusId, new Set(), 0);
   }
@@ -1868,6 +1868,7 @@ import { initDiagram } from './diagram.js';
       : '';
     const cyc = node.cycle ? '<span class="cycmark">↻ 循環</span>' : '';
     const trunc = node.truncated ? '<span class="floc">…(深さ上限)</span>' : '';
+    const ev = evidenceChip(node);
     const selected = state.apiSel === node.id && !node.cycle ? ' selected' : '';
     const kids = node.children.map((c) => renderFlowNode(c, top, false, dir)).join('');
     // ホバーで説明文(docコメント)を表示。無ければノード ID
@@ -1881,6 +1882,7 @@ import { initDiagram } from './diagram.js';
       `<span class="lb">${esc(n.label)}</span>` +
       floc +
       siteChip +
+      ev +
       cyc +
       trunc +
       `</div>` +
@@ -1963,6 +1965,20 @@ import { initDiagram } from './diagram.js';
       testHtml +
       `<div class="sec">フロー(実装 → 下流)</div>` +
       `<div class="flow">${renderFlowNode(downTree, undefined, true, 'down')}</div>`;
+  }
+
+  // 線を引いた根拠。弱いものを黙って混ぜないよう、フローの各行に出す
+  const EVIDENCE_LABEL = {
+    exact: '完全修飾名の一致 — 強い',
+    configured: '設定で明示',
+    structural: '構造的な証拠(解決済み import / 生成コードの埋め込み / 登録)',
+    name: '名前が一致しただけ — 弱い',
+  };
+  /** rpc / impl の線に付いた根拠を、フローの行に出すチップにする。 */
+  function evidenceChip(edge) {
+    if (!edge || !edge.evidence) return '';
+    const weak = edge.evidence === 'name' ? ' weak' : '';
+    return ` <span class="evchip${weak}" title="${esc(EVIDENCE_LABEL[edge.evidence] || edge.evidence)}">${esc(edge.evidence)}</span>`;
   }
 
   /** 読み込み中の表示。待たせる画面はすべてこれを出す(無言で固まって見えるのを避ける)。 */

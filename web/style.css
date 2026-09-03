@@ -309,6 +309,16 @@ body {
   animation: strata-spin .8s linear infinite;
   pointer-events: none;
 }
+/* 線を引いた根拠。弱いもの(名前一致だけ)は色で区別する */
+.evchip {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: var(--pill);
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.evchip.weak { color: var(--warn); border-color: var(--warn); }
 /* 解析台帳のバッジ。欠落があるときだけ色を付ける */
 .cov-badge { color: var(--muted); font-weight: 600; }
 .cov-badge.warn { color: var(--warn); }

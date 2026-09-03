@@ -5,6 +5,7 @@
 // 型推論はしない。ローカル関数呼び出しは「同一ファイル内で定義された名前」のみ接続する。
 
 import { chainBase, readFileText, type Ctx, type Project } from '../context.ts';
+import { setEvidence } from '../model.ts';
 
 interface ExDef {
   name: string;
@@ -266,7 +267,8 @@ export function linkEx(ctx: Ctx, state: ExState): void {
         const rpcName = snakeToPascal(fn);
         const candidates = lookupRpc(ctx, rpcName).filter((r) => r.service === service);
         if (candidates.length === 1) {
-          ctx.builder.addEdge(fromId, candidates[0].rpcId, 'rpc', 1, { f: file.id, l: i + 1 });
+          // 名前の一致だけ
+          setEvidence(ctx.builder.addEdge(fromId, candidates[0].rpcId, 'rpc', 1, { f: file.id, l: i + 1 }), 'name');
         } else if (candidates.length > 1) {
           ctx.stats.ambiguous++;
           ctx.builder.warn(

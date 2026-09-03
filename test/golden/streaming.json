@@ -121,7 +121,8 @@
           "f": "app/app.go",
           "l": 29
         }
-      ]
+      ],
+      "evidence": "structural"
     },
     {
       "from": "app",
@@ -133,7 +134,8 @@
           "f": "app/app.go",
           "l": 16
         }
-      ]
+      ],
+      "evidence": "structural"
     },
     {
       "from": "app#App.Sync",
@@ -145,7 +147,8 @@
           "f": "app/app.go",
           "l": 29
         }
-      ]
+      ],
+      "evidence": "structural"
     },
     {
       "from": "app#App.Watch",
@@ -157,19 +160,22 @@
           "f": "app/app.go",
           "l": 16
         }
-      ]
+      ],
+      "evidence": "structural"
     },
     {
       "from": "proto/feed.proto#FeedService.Sync",
       "to": "app#App.Sync",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "name"
     },
     {
       "from": "proto/feed.proto#FeedService.Watch",
       "to": "app#App.Watch",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "name"
     }
   ],
   "warnings": [

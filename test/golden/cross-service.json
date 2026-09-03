@@ -280,7 +280,8 @@
       "from": "proto-defs/a/v1/a.proto#AService.GetA",
       "to": "svc-a#AServer.GetA",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "proto-defs/b/v1/b.proto",
@@ -292,7 +293,8 @@
       "from": "proto-defs/b/v1/b.proto#BService.GetB",
       "to": "svc-b#BServer.GetB",
       "count": 1,
-      "kind": "impl"
+      "kind": "impl",
+      "evidence": "structural"
     },
     {
       "from": "svc-b",
@@ -305,6 +307,7 @@
           "l": 25
         }
       ],
+      "evidence": "exact",
       "via": [
         "artifact:client-lib/a/v1"
       ]
@@ -332,6 +335,7 @@
           "l": 25
         }
       ],
+      "evidence": "exact",
       "via": [
         "artifact:client-lib/a/v1"
       ]
@@ -347,6 +351,7 @@
           "l": 17
         }
       ],
+      "evidence": "exact",
       "via": [
         "artifact:client-lib/a/v1"
       ]
@@ -362,6 +367,7 @@
           "l": 17
         }
       ],
+      "evidence": "exact",
       "via": [
         "artifact:client-lib/a/v1"
       ]
@@ -377,6 +383,7 @@
           "l": 14
         }
       ],
+      "evidence": "exact",
       "via": [
         "artifact:client-lib/b/v1"
       ]
@@ -392,6 +399,7 @@
           "l": 14
         }
       ],
+      "evidence": "exact",
       "via": [
         "artifact:client-lib/b/v1"
       ]

@@ -160,6 +160,16 @@ function scanWithout(dir, key) {
   if (chain) ok('3 サービス連鎖: A の API から、B を越えて C まで遡れる線が揃う');
   else fail('サービス境界を越える上流の連鎖が繋がっていない');
 
+  // 線の根拠。全部同じ見た目だと、強い証拠と名前一致だけを利用者が区別できない
+  const rpcs = model.edges.filter((e) => e.kind === 'rpc');
+  const impls = model.edges.filter((e) => e.kind === 'impl');
+  if (rpcs.length > 0 && rpcs.every((e) => e.evidence === 'exact'))
+    ok('3 サービス連鎖: 生成物を特定した完全修飾一致は exact として残る');
+  else fail('rpc の根拠が想定外: ' + JSON.stringify(rpcs.map((e) => e.evidence)));
+  if (impls.length > 0 && impls.every((e) => e.evidence === 'structural'))
+    ok('3 サービス連鎖: Unimplemented 埋め込みによる実装は structural として残る');
+  else fail('impl の根拠が想定外: ' + JSON.stringify(impls.map((e) => e.evidence)));
+
   // mock は呼び出し元として検出される(ビューアの「mock を除外」で落とす対象)
   if (has('rpc', 'svc-b/mocks#MockAServiceClient.GetA', 'AService.GetA'))
     ok('3 サービス連鎖: mock も呼び出し元として現れる(除外フィルタの対象)');
