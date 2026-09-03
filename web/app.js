@@ -900,16 +900,27 @@ import { initDiagram } from './diagram.js';
   }
 
   // ---------- サイドパネル ----------
+  function oneFileLink(file, lineNo, label) {
+    if (IS_STATIC) {
+      // エクスポート HTML にはサーバーが無いので vscode:// スキームに頼る
+      const href = 'vscode://file' + encodeURI(model.root + '/' + file) + ':' + lineNo;
+      return `<a href="${href}">${esc(label)}</a>`;
+    }
+    return `<a href="#" class="editorlink" data-open-file="${esc(file)}" data-open-line="${lineNo}" title="ローカルのエディタで開く">${esc(label)}</a>`;
+  }
   function fileLink(n) {
     const meta = n.meta || {};
     if (!meta.file) return '';
     const lineNo = meta.line || 1;
-    if (IS_STATIC) {
-      // エクスポート HTML にはサーバーが無いので vscode:// スキームに頼る
-      const href = 'vscode://file' + encodeURI(model.root + '/' + meta.file) + ':' + lineNo;
-      return `<a href="${href}">${esc(meta.file)}:${lineNo}</a>`;
-    }
-    return `<a href="#" class="editorlink" data-open-file="${esc(meta.file)}" data-open-line="${lineNo}" title="ローカルのエディタで開く">${esc(meta.file)}:${lineNo}</a>`;
+    const main = oneFileLink(meta.file, lineNo, meta.file + ':' + lineNo);
+    // build tag で排他な別実装は同じノードに畳まれる。畳んだ事実を隠さない
+    const others = (meta.variants || []).filter((f) => f !== meta.file);
+    if (others.length === 0) return main;
+    return (
+      main +
+      ` <span class="loc" title="build tag などで排他な別定義。図では 1 つのノードに畳んでいます">` +
+      `他 ${others.length} 定義: ${others.map((f) => oneFileLink(f, 1, f)).join(' / ')}</span>`
+    );
   }
   // エディタ起動はサーバー(/open)経由。vscode:// を扱えないブラウザでも動く
   document.addEventListener('click', (ev) => {

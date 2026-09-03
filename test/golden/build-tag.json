@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 4,
+  "name": "build-tag",
+  "nodes": [
+    {
+      "id": "svc",
+      "label": "svc",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "svc/internal",
+      "label": "internal",
+      "parent": "svc",
+      "kind": "dir"
+    },
+    {
+      "id": "svc/internal/api",
+      "label": "api",
+      "parent": "svc/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 8,
+      "meta": {
+        "typeDefs": {
+          "Handler": {
+            "f": "svc/internal/api/api.go",
+            "l": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "svc/internal/api#Handler.Load",
+      "label": "Handler.Load",
+      "parent": "svc/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "svc/internal/api/api.go",
+        "line": 7
+      }
+    },
+    {
+      "id": "svc/internal/store",
+      "label": "store",
+      "parent": "svc/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 16,
+      "meta": {
+        "typeDefs": {
+          "Store": {
+            "f": "svc/internal/store/store_dev.go",
+            "l": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "svc/internal/store#Store.Get",
+      "label": "Store.Get",
+      "parent": "svc/internal/store",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "svc/internal/store/store_dev.go",
+        "line": 7,
+        "variants": [
+          "svc/internal/store/store_dev.go",
+          "svc/internal/store/store_prod.go"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "svc/internal/api",
+      "to": "svc/internal/store",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "svc/internal/api#Handler.Load",
+      "to": "svc/internal/store#Store.Get",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "svc/internal/api/api.go",
+          "l": 7
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 15,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 1,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

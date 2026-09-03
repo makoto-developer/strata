@@ -221,6 +221,10 @@ strata trace  [dir|model.json] <関数ID> [--up]   # 端末上でコールツリ
 | proto | `rpc Name(Req) returns (Res)` | `UserService.GetUser` |
 
 - Go の関数ノードはパッケージ直下(Go はパッケージが名前空間のため)。`meta.file` と `meta.line` で位置を保持
+- **build tag で排他な実装は 1 つのノードに畳みます。** `//go:build dev` と `//go:build !dev` で
+  同じ `Store.Get` を定義していても、どちらが有効かはビルド時の指定で決まるので、静的には選べません。
+  行数は二重に数えず、畳んだファイルの一覧を `meta.variants` に残します(ビューアの詳細に「他 N 定義」として出ます)。
+  タグの条件式は評価しません
 - TS/JS の関数ノードはファイル直下
 - コメント・文字列リテラルは除去してから解析。ブレース対応で関数本体の範囲を特定する
 

@@ -216,6 +216,10 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
     list.push(wsRel);
   }
 
+  // 走査順が環境で変わると、同じ id を作る別実装(build tag)のどちらが meta に残るかが揺れる
+  for (const list of filesByDir.values()) list.sort();
+
+  const funcVariants = new Map<string, string[]>(); // funcId -> 定義ファイル(build tag で複数になる)
   const pkgIdOfDir = new Map<string, string>();
   for (const dir of [...filesByDir.keys()].sort()) {
     let pkgId: string;
@@ -344,6 +348,16 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
         for (let i = open; i <= close; i++) if (blanked[i] === '\n') bodyLines++;
         const declLine = lineOf(m.index);
         const doc = leadingComment(srcLines, declLine);
+        // build tag で排他な別実装は同じ id になる。addNode は loc を足し meta を上書きするので、
+        // そのまま渡すと行数が二重に乗り、どのファイルが残るかが走査順で変わる
+        const variantOf = funcVariants.get(funcId);
+        if (variantOf) {
+          if (!variantOf.includes(wsRel)) variantOf.push(wsRel);
+          ctx.builder.addNode({ id: funcId, label, parent: pkgId, kind: 'func', lang: 'go', meta: { variants: variantOf } });
+          functions.push({ id: funcId, name, recv, sig: blanked.slice(m.index, open), bodyStart: open, bodyEnd: close });
+          continue;
+        }
+        funcVariants.set(funcId, [wsRel]);
         ctx.builder.addNode({
           id: funcId,
           label,
@@ -362,8 +376,10 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
         functions.push({ id: funcId, name, recv, sig: blanked.slice(m.index, open), bodyStart: open, bodyEnd: close });
         if (!recv && !funcIndex.has(name)) funcIndex.set(name, funcId);
         if (recv) {
-          // 同名メソッドが複数レシーバに定義されている場合は曖昧(null)にする
-          methodIndex.set(name, methodIndex.has(name) ? null : funcId);
+          // 同名メソッドが複数レシーバに定義されている場合は曖昧(null)にする。
+          // build tag の別実装は id が同じなので曖昧ではない(呼び出し先は一意に決まる)
+          const prevMethod = methodIndex.get(name);
+          methodIndex.set(name, prevMethod === undefined || prevMethod === funcId ? funcId : null);
         }
       }
 

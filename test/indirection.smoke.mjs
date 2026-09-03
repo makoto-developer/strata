@@ -303,6 +303,23 @@ function scanWithout(dir, key) {
   else fail('モック配置: 期待した検出結果でない');
 }
 
+// --- パターン M: build tag で排他な 2 実装(同じ id を作る) ---
+{
+  const model = scan(path.join(patternsDir, 'build-tag'));
+  const get = model.nodes.find((n) => n.id === 'svc/internal/store#Store.Get');
+  if (get && get.loc === 1) ok('build tag: 別実装の行数を二重に数えない');
+  else fail(`build tag: loc が二重計上されている (${get && get.loc})`);
+  const variants = (get && get.meta && get.meta.variants) || [];
+  if (variants.length === 2) ok('build tag: どの実装が畳まれたかを残す');
+  else fail(`build tag: variants が記録されていない (${JSON.stringify(variants)})`);
+  const call = model.edges.some(
+    (e) => e.kind === 'call' && e.to === 'svc/internal/store#Store.Get',
+  );
+  // 同じ id の再定義を「同名の別メソッド」と誤認すると、呼び出しごと消える
+  if (call) ok('build tag: 呼び出しを曖昧扱いで落とさない');
+  else fail('build tag: 呼び出しが消えている');
+}
+
 // --- パターン J: 手書きの interface / モックを gRPC 呼び出しと誤認しない ---
 {
   const model = scan(path.join(patternsDir, 'handwritten-client'));
