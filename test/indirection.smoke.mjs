@@ -397,6 +397,27 @@ function scanWithout(dir, key) {
   else fail(`OpenAPI(JSON): basePath が違う (${spec && spec.basePath})`);
 }
 
+// --- パターン O: デプロイ定義でホスト名から宛先サービスを決める ---
+{
+  const model = scan(path.join(patternsDir, 'deploy-topology'));
+  // user-api と order-api は同じ GET /health を持つ。パスだけでは宛先が決まらない
+  const call = model.edges.find((e) => e.kind === 'http' && e.from.includes('CheckOrders'));
+  if (call && call.to.startsWith('route:order-api/')) ok('デプロイ: ホスト名で宛先サービスを決める');
+  else fail(`デプロイ: 宛先が違う (${call && call.to})`);
+  const user = model.nodes.find((n) => n.id === 'user-api');
+  const dep = (user && user.meta && user.meta.deploy) || {};
+  if (dep.replicas === 3 && dep.image === 'registry.example.com/user-api:1.4.0')
+    ok('デプロイ: image と replicas を記録する');
+  else fail(`デプロイ: 配置情報が読めていない (${JSON.stringify(dep)})`);
+  // spec.template.metadata.name(user-api-pod)を metadata.name と取り違えない
+  if ((dep.workloads || []).join(',') === 'Deployment/user-api')
+    ok('デプロイ: template の name を取り違えない');
+  else fail(`デプロイ: workload 名が違う (${JSON.stringify(dep.workloads)})`);
+  const w = model.warnings.join('\n');
+  if (/対応するコードが無い.*redis/.test(w)) ok('デプロイ: コードの無いクラスタ依存を報告する');
+  else fail('デプロイ: 未対応のリソースを報告していない');
+}
+
 // --- パターン J: 手書きの interface / モックを gRPC 呼び出しと誤認しない ---
 {
   const model = scan(path.join(patternsDir, 'handwritten-client'));

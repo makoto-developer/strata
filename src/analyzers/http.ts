@@ -20,6 +20,7 @@ import type { Ctx } from '../context.ts';
 import { makeLineFinder, matchBrace, stripSource } from '../lex.ts';
 import { setEvidence } from '../model.ts';
 import { globToRegex } from '../path-glob.ts';
+import { normalizeName } from './deploy.ts';
 import {
   buildFuncIndex,
   buildShortNameIndex,
@@ -536,8 +537,19 @@ export function detectHttp(ctx: Ctx): void {
   const isInternalHost = (host: string | undefined): boolean => {
     if (host === undefined || host === '') return true; // ホストが無い = 相対パス
     const name = host.toLowerCase().split(':')[0];
+    // デプロイ定義に同じ名前の Service があるなら、ドット付きでもクラスタ内
+    if (ctx.deployHosts.has(normalizeName(name))) return true;
+    if (ctx.deployHosts.has(normalizeName(name.replace(/\.svc\.cluster\.local$/, '')))) return true;
     if (!name.includes('.')) return true; // クラスタ内のサービス名
     return internalHostPatterns.some((re) => re.test(name) || re.test(host.toLowerCase()));
+  };
+
+  /** ホスト名がデプロイ定義で特定のサービスを指しているなら、そのノード id。 */
+  const hostService = (host: string | undefined): string | undefined => {
+    if (host === undefined || host === '') return undefined;
+    const name = host.toLowerCase().split(':')[0].replace(/\.svc\.cluster\.local$/, '');
+    const hit = ctx.deployHosts.get(normalizeName(name)) ?? ctx.deployHosts.get(normalizeName(name.split('.')[0]));
+    return hit === undefined || hit === '' ? undefined : hit;
   };
 
   // クライアント呼び出しの解決
@@ -551,6 +563,13 @@ export function detectHttp(ctx: Ctx): void {
     const mayBeInternal = isInternalHost(call.host);
     let targets = mayBeInternal && key ? (byKey.get(key) ?? []) : [];
     if (mayBeInternal && targets.length === 0) targets = byPath.get(pk) ?? [];
+    // 宛先がデプロイ定義で決まるなら、パスが同じだけの別サービスを候補から外す。
+    // 同じ /health を持つサービスが並んでいても宛先を取り違えない
+    const destService = hostService(call.host);
+    if (destService !== undefined && targets.length > 0) {
+      const narrowed = targets.filter((id) => topAncestorId(ctx, id) === destService);
+      targets = narrowed; // 名前で宛先が分かっているのに一致しない = そのルートではない
+    }
     if (targets.length === 1) {
       ctx.builder.addEdge(from, targets[0], 'http', 1, site);
       continue;
@@ -567,7 +586,11 @@ export function detectHttp(ctx: Ctx): void {
     // ホスト名が宛先サービスと一致するか、ホスト無し(自サービス内の相対パス)のときだけ繋ぐ
     if (key) {
       const declared = (ctx.declaredRoutes.get(key) ?? []).filter((id) =>
-        call.host ? serviceMatchesHost(ctx, id, call.host) : topAncestorId(ctx, id) === topAncestorId(ctx, from),
+        call.host
+          ? destService !== undefined
+            ? topAncestorId(ctx, id) === destService
+            : serviceMatchesHost(ctx, id, call.host)
+          : topAncestorId(ctx, id) === topAncestorId(ctx, from),
       );
       if (declared.length === 1) {
         setEvidence(ctx.builder.addEdge(from, declared[0], 'http', 1, site), 'configured');

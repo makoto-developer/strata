@@ -15,24 +15,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Ctx, Project } from '../context.ts';
 import { setEvidence } from '../model.ts';
+import { sniffSpec } from '../datafile.ts';
 import { normalizePath, pathKey } from './endpoints.ts';
 
 const METHODS = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
-const SNIFF_BYTES = 4096; // 仕様書かどうかの判定に読む先頭バイト数
-const MAX_SPEC_BYTES = 8 * 1024 * 1024;
-
-/** 仕様書らしいファイル名(中身を読まずに判定できる速い経路)。 */
-export function looksLikeSpecName(base: string): boolean {
-  return /(^|[._-])(openapi|swagger)([._-]|$)/i.test(base.replace(/\.(ya?ml|json)$/i, ''));
-}
-
-/**
- * 中身の先頭を見て OpenAPI / Swagger か判定する。
- * ファイル名が api.yaml や v1.yaml のこともあるので、名前だけでは足りない。
- */
-export function sniffSpec(text: string): boolean {
-  return /^\s*"?(openapi|swagger)"?\s*:\s*["']?\d/m.test(text.slice(0, SNIFF_BYTES));
-}
 
 export interface DeclaredOp {
   method: string;
@@ -233,27 +219,6 @@ function pickSpecDocument(text: string): string | undefined {
 
 export function parseSpec(text: string): ParsedSpec | undefined {
   return parseJsonSpec(text) ?? parseYamlSpec(text);
-}
-
-/** 仕様書ファイルかを名前と中身で判定する(scan からファイル振り分けに使う)。 */
-export function isSpecFile(absPath: string, rel: string): boolean {
-  const base = path.posix.basename(rel);
-  if (!/\.(ya?ml|json)$/i.test(base)) return false;
-  try {
-    const st = fs.statSync(absPath);
-    if (!st.isFile() || st.size > MAX_SPEC_BYTES) return false;
-    if (looksLikeSpecName(base)) return true;
-    const fd = fs.openSync(absPath, 'r');
-    try {
-      const buf = Buffer.alloc(SNIFF_BYTES);
-      const read = fs.readSync(fd, buf, 0, SNIFF_BYTES, 0);
-      return sniffSpec(buf.subarray(0, read).toString('utf8'));
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch {
-    return false;
-  }
 }
 
 /**

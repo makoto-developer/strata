@@ -23,6 +23,14 @@ export interface NodeMeta {
   spec?: 'openapi'; // API 仕様書ファイル
   declared?: boolean; // 仕様書で宣言されたエンドポイント(コードから見つけた実装と対にする)
   operationId?: string; // OpenAPI の operationId
+  // デプロイ定義(Kubernetes)から読んだ配置情報
+  deploy?: {
+    service?: string;
+    namespace?: string;
+    workloads?: string[];
+    image?: string;
+    replicas?: number;
+  };
   doc?: string; // 説明文(godoc / proto コメント等)
   entry?: 'main' | 'view'; // エントリーポイント種別(プロセス起動点 / LiveView 画面)
   events?: string[]; // LiveView の handle_event 名

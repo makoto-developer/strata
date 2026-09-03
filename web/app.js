@@ -962,6 +962,19 @@ import { initDiagram } from './diagram.js';
     );
   }
 
+  /** デプロイ定義(k8s)から読んだ配置。どこで動いているかはコードから読めない情報 */
+  function deploySection(n) {
+    const d = (n.meta || {}).deploy;
+    if (!d) return '';
+    const rows = [];
+    if (d.service) rows.push(`Service: ${esc(d.service)}${d.namespace ? ' (ns: ' + esc(d.namespace) + ')' : ''}`);
+    if (d.workloads && d.workloads.length) rows.push(esc(d.workloads.join(', ')));
+    if (d.image) rows.push(`image: ${esc(d.image)}`);
+    if (d.replicas !== undefined) rows.push(`replicas: ${esc(String(d.replicas))}`);
+    if (!rows.length) return '';
+    return `<div class="sec">デプロイ</div><div class="sub">${rows.join('<br>')}</div>`;
+  }
+
   // 経路探索セクション(サイドパネル共通)
   function buildPathSection(n) {
     let html =
@@ -1279,6 +1292,7 @@ import { initDiagram } from './diagram.js';
       sideEl.innerHTML =
         `<h3>${KIND_ICON[n.kind] || '◆'} ${esc(n.label)}</h3>` +
         `<div class="sub">${esc(n.id)}</div>` +
+        deploySection(n) +
         isolated +
         `<div class="sec">依存先サービス (${outMap.size})</div>` +
         `<div class="svclist">${sorted(outMap).map(svcItem).join('') || '<div class="sub">なし</div>'}</div>` +
@@ -1329,12 +1343,14 @@ import { initDiagram } from './diagram.js';
     if (n.lang) metaInfo.push(n.lang);
     if (n.loc) metaInfo.push(n.loc + ' 行');
     const services = n.meta && n.meta.services ? `<div class="sub">service: ${esc(n.meta.services.join(', '))}</div>` : '';
+    const deployHtml = deploySection(n);
     const docHtml = n.meta && n.meta.doc ? `<div class="rpcdoc sidedoc">${esc(n.meta.doc)}</div>` : '';
     sideEl.innerHTML =
       `<h3>${KIND_ICON[n.kind] || '·'} ${esc(n.label)}</h3>` +
       docHtml +
       `<div class="sub">${esc(n.id)}<br>${metaInfo.join(' ・ ')} ${fileLink(n)}</div>` +
       services +
+      deployHtml +
       traceButtons +
       traceHtml +
       buildPathSection(n) +

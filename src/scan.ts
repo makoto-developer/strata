@@ -21,7 +21,9 @@ import { detectMessaging } from './analyzers/messaging.ts';
 import { resolveInfraTopics } from './analyzers/infra.ts';
 import { detectHttp } from './analyzers/http.ts';
 import { detectGraphql } from './analyzers/graphql.ts';
-import { registerOpenapi, linkOpenapi, isSpecFile } from './analyzers/openapi.ts';
+import { registerOpenapi, linkOpenapi } from './analyzers/openapi.ts';
+import { registerDeploy } from './analyzers/deploy.ts';
+import { classifyDataFile } from './datafile.ts';
 import { collectRpcCallEvidence } from './rpc-call-evidence.ts';
 import { resolveIndirection } from './indirection.ts';
 import { markViolations } from './rules.ts';
@@ -238,6 +240,7 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
       pyFiles: [],
       gqlFiles: [],
       openapiFiles: [],
+      k8sFiles: [],
       protoFiles: [],
       genGrpcFiles: [],
       testFiles: [],
@@ -247,14 +250,15 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
   const pseudo: Project = {
     rootRel: '', nodeId: '', name: '(workspace)',
     hasGo: false, hasJs: false, hasEx: false, hasPy: false,
-    goFiles: [], jsFiles: [], exFiles: [], pyFiles: [], gqlFiles: [], openapiFiles: [], protoFiles: [], genGrpcFiles: [], testFiles: [],
+    goFiles: [], jsFiles: [], exFiles: [], pyFiles: [], gqlFiles: [], openapiFiles: [], k8sFiles: [], protoFiles: [], genGrpcFiles: [], testFiles: [],
   };
   const hasWsRootProject = projects.has('');
 
-  const specEnabled = config.openapi?.enabled !== false;
+  // どちらも無効なら 4KB 読みごと省く
+  const dataEnabled = config.openapi?.enabled !== false || config.deploy?.enabled !== false;
   for (const rel of files) {
     // 仕様書はソースコードではないので isSourceFile の分類とは別に拾う
-    const kind = isSourceFile(rel, config) ?? (specEnabled && isSpecFile(path.join(rootAbs, rel), rel) ? 'openapi' : undefined);
+    const kind = isSourceFile(rel, config) ?? (dataEnabled ? classifyDataFile(path.join(rootAbs, rel), rel) : undefined);
     if (!kind) continue;
     let owner: Project | undefined;
     for (const rootRel of rootsSorted) {
@@ -271,6 +275,7 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
     else if (kind === 'py') owner.pyFiles.push(rel);
     else if (kind === 'gql') owner.gqlFiles.push(rel);
     else if (kind === 'openapi') owner.openapiFiles.push(rel);
+    else if (kind === 'k8s') owner.k8sFiles.push(rel);
     else if (kind === 'gengrpc') owner.genGrpcFiles.push(rel);
     else if (kind === 'test') owner.testFiles.push(rel);
     else owner.protoFiles.push(rel);
@@ -342,9 +347,19 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
       lang: p.hasGo ? 'go' : p.hasEx ? 'ex' : p.hasPy ? 'py' : 'ts',
     });
   }
-  if (pseudo.goFiles.length + pseudo.jsFiles.length + pseudo.exFiles.length + pseudo.gqlFiles.length + pseudo.protoFiles.length > 0) {
-    projectList.push(pseudo);
-  }
+  // 仕様書やマニフェストしか無い擬似プロジェクトも残す。
+  // ソースコードだけで判定していたため、ワークスペース直下に置いた
+  // openapi.yaml / k8s マニフェストが読まれずに消えていた
+  const pseudoFiles =
+    pseudo.goFiles.length +
+    pseudo.jsFiles.length +
+    pseudo.exFiles.length +
+    pseudo.pyFiles.length +
+    pseudo.gqlFiles.length +
+    pseudo.openapiFiles.length +
+    pseudo.k8sFiles.length +
+    pseudo.protoFiles.length;
+  if (pseudoFiles > 0) projectList.push(pseudo);
 
   const wsName = config.name ?? path.basename(rootAbs);
   return { config, projects: projectList, builder, wsName };
@@ -433,6 +448,7 @@ export function scan(rootDir: string): Graph {
     rpcByName: new Map(),
     rpcByNameLower: new Map(),
     rpcOfProto: new Map(),
+    deployHosts: new Map(),
     declaredRoutes: new Map(),
     protoFiles: [],
     protoByBase: new Map(),
@@ -459,6 +475,7 @@ export function scan(rootDir: string): Graph {
   linkTests(ctx); // rpcByName 索引が揃った後に実行する
   detectConfigSurface(ctx); // 各サービスの環境変数(設定サーフェス)を meta に付与
   detectMessaging(ctx); // Pub/Sub のトピック経由の依存(config.messaging がある時のみ)
+  registerDeploy(ctx, ctx.projects); // ホスト名 → サービスの同定。detectHttp の宛先解決に使う
   registerOpenapi(ctx, ctx.projects); // 宣言された API。呼び出し解決の候補にするため detectHttp より先
   detectHttp(ctx); // HTTP(REST / webhook)のルートと呼び出し。関数ノードが揃った後に実行する
   linkOpenapi(ctx); // 宣言と実装の突き合わせ。ルートノードが揃った後に実行する

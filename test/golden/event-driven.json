@@ -171,7 +171,13 @@
       "meta": {
         "envVars": [
           "KAFKA_TOPIC"
-        ]
+        ],
+        "deploy": {
+          "workloads": [
+            "Deployment/order"
+          ],
+          "image": "example/order:latest"
+        }
       }
     },
     {

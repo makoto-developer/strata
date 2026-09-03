@@ -38,6 +38,8 @@ export interface Config {
   graphql?: { enabled?: boolean };
   // OpenAPI / Swagger 仕様書の取り込み。既定は有効
   openapi?: { enabled?: boolean };
+  // デプロイ定義(Kubernetes)からのサービス同定。既定は有効
+  deploy?: { enabled?: boolean };
   // 間接層(生成クライアントライブラリ / Gateway / Federation 経由の呼び出し)の解決。既定は無効
   indirection?: IndirectionConf;
   // IaC(k8s / Helm / Terraform)から環境変数の値を逆引きする。既定は無効
@@ -125,6 +127,7 @@ export interface Project {
   pyFiles: string[];
   gqlFiles: string[]; // .graphql / .gql / .graphqls(スキーマ)
   openapiFiles: string[]; // OpenAPI / Swagger 仕様書(名前と中身で判定)
+  k8sFiles: string[]; // Kubernetes マニフェスト(apiVersion + kind で判定)
   protoFiles: string[];
   genGrpcFiles: string[]; // 生成済み *_grpc.pb.go(.proto ソースがない場合のフォールバック用)
   testFiles: string[]; // 除外されたテスト(RPC のテスト呼び出し検出にだけ使う)
@@ -172,7 +175,9 @@ export interface Ctx {
   rpcByName: Map<string, RpcInfo[]>; // RPC名(原形と lowerCamel)-> 候補
   rpcByNameLower: Map<string, RpcInfo[]>; // RPC名の小文字化 -> 候補(頭字語の表記ゆれ救済用)
   rpcOfProto: Map<string, Map<string, RpcInfo>>; // proto node id -> (RPC名 -> info)
-  declaredRoutes: Map<string, string[]>; // "METHOD /path" -> OpenAPI で宣言された route ノード id
+  // ホスト名(正規化) -> サービスノード id。'' = クラスタにはあるがコードが無い依存先
+  deployHosts: Map<string, string>;
+    declaredRoutes: Map<string, string[]>; // "METHOD /path" -> OpenAPI で宣言された route ノード id
     protoFiles: Array<{ id: string; wsRel: string }>;
   protoByBase: Map<string, string[]>; // 拡張子なし基底名 -> proto node ids
   // JS/TS
