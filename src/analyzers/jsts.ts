@@ -572,6 +572,7 @@ export function linkJs(ctx: Ctx, state: JsState): void {
       if (candidates.length === 1) {
         ctx.builder.addEdge(caller, candidates[0].rpcId, 'rpc', 1, siteAt(m.index));
       } else if (candidates.length > 1) {
+        ctx.stats.ambiguous++;
         ctx.builder.warn(`RPC 名 '${member}' が複数の proto に一致するため接続をスキップ: ${file.wsRel}`);
       }
     }

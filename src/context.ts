@@ -145,6 +145,15 @@ export interface Ctx {
   // 解決できなかった内部 import。1 件ずつ警告すると 50 リポジトリで 1,000 行出て、
   // 本物の警告が埋もれる。集計してから、間接層が説明できたものを除いて出す
   unresolvedImports: Set<string>;
+  // 解析台帳。「どこまで見えているか」を数える。0 件の未解決が
+  // 「完全に解析できた」を意味しないことを、数字で示せるようにするため
+  stats: {
+    filesRead: number; // 読めたソースファイル
+    filesFailed: number; // 読めなかった(権限・エンコーディング等)
+    importsResolved: number; // 内部 import のうち解決できたもの
+    ambiguous: number; // 候補が複数で「繋がなかった」回数(取りこぼしの明示)
+    rpcLinked: number; // 間接層が線に落とせた RPC 呼び出し
+  };
   // 間接層が見つけた生成物のディレクトリ(未解決 import の説明に使う)
   artifactDirs: string[];
   goImplTypeServices: Map<string, Set<string>>; // "pkgId#Type" -> その型が実装する service 名(複数埋め込みもある)
@@ -244,7 +253,15 @@ export function chainBase(ctx: Ctx, project: Project, fileDir: string): { baseWs
 }
 
 export function readFileText(ctx: Ctx, wsRel: string): string {
-  return fs.readFileSync(path.join(ctx.rootAbs, wsRel), 'utf8');
+  try {
+    const text = fs.readFileSync(path.join(ctx.rootAbs, wsRel), 'utf8');
+    ctx.stats.filesRead++;
+    return text;
+  } catch (err) {
+    // 読めなかった事実を数える。握りつぶすと「解析できた」と区別が付かない
+    ctx.stats.filesFailed++;
+    throw err;
+  }
 }
 
 /** rel が config のサービスに属するか等の判定に使う内部ヘルパを scan.ts へ公開。 */

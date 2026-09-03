@@ -309,6 +309,9 @@ body {
   animation: strata-spin .8s linear infinite;
   pointer-events: none;
 }
+/* 解析台帳のバッジ。欠落があるときだけ色を付ける */
+.cov-badge { color: var(--muted); font-weight: 600; }
+.cov-badge.warn { color: var(--warn); }
 @keyframes strata-spin { to { transform: rotate(360deg); } }
 /* ---------- 読み込み中の表示(待たせる画面はすべてこれを使う) ---------- */
 .loadbox {

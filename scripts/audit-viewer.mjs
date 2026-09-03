@@ -58,6 +58,16 @@ const text = (sel) => page.textContent(sel).catch(() => '');
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1800);
 
+// 解析台帳のバッジ。「未解決 0 件 = 完全に解析できた」と誤解させないための表示
+{
+  const cov = await page.evaluate(() => {
+    const b = document.querySelector('.cov-badge');
+    return b ? { text: b.textContent.trim(), tip: b.title.length } : null;
+  });
+  record('解析台帳のバッジが出る', !!cov && cov.text.includes('解析') && cov.tip > 40,
+    cov ? cov.text : 'バッジが無い');
+}
+
 // 起動オーバーレイ: 消し忘れると画面全体を覆って何も操作できなくなる
 {
   const boot = await page.evaluate(() => {

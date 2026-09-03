@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "event-driven",
   "nodes": [
     {
@@ -219,6 +219,30 @@
   "warnings": [
     "環境変数経由のトピック名を IaC から 3 件解決しました"
   ],
+  "coverage": {
+    "files": {
+      "read": 30,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": true,
+      "http": true,
+      "graphql": true,
+      "messaging": true
+    }
+  },
   "unresolved": [
     {
       "reason": "env",

@@ -407,6 +407,7 @@ export function resolveIndirection(ctx: Ctx): void {
     }
     linkResolved(ctx, ev, res);
     linked++;
+    ctx.stats.rpcLinked++;
   }
 
   const relays = markRelayCandidates(ctx);

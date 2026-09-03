@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "handwritten-client",
   "nodes": [
     {
@@ -111,6 +111,30 @@
     }
   ],
   "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 6,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 1,
+      "resolvedByIndirection": 0,
+      "unresolved": 1
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  },
   "unresolved": [
     {
       "reason": "artifact",

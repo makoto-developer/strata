@@ -33,6 +33,7 @@ const HELP = `Strata — 多言語・マイクロサービス対応の依存関�
   strata diff   <old> <new> [--json]        2 モデルを比較(依存増減・新規/解消の循環)
                 [dir] --ref <base>..<head>  2 つの git ref を直接比較(head 省略で作業ツリー)
   strata trace  [dir|model.json] <関数名/ID> [--up] [--depth N] コールツリーを表示
+  strata doctor [dir|model.json]           解析台帳(どこまで見えているか)を表示
   strata init   [dir] [--force]            strata.config.json の雛形を作成
   strata --version                         バージョンを表示(不具合報告時に添えてください)
 
@@ -70,6 +71,18 @@ function parseArgs(argv: string[]): Args {
     }
   }
   return args;
+}
+
+/** 「見えなかったと分かっている量」を 1 行で。率は構成で分母が変わるので出さない。 */
+function coverageLine(model: Graph): string {
+  const c = model.coverage;
+  if (!c) return '';
+  const gaps = c.files.failed + c.imports.unresolved + c.rpcCalls.unresolved + c.ambiguous;
+  return (
+    `解析台帳: ファイル ${c.files.read}(読めず ${c.files.failed}) / ` +
+    `未解決 import ${c.imports.unresolved} / 未解決 RPC ${c.rpcCalls.unresolved} / 曖昧でスキップ ${c.ambiguous}` +
+    (gaps > 0 ? ` — 見えなかったと分かっている箇所 ${gaps} 件(strata doctor で内訳)` : '')
+  );
 }
 
 function loadModel(input: string | undefined, ref?: string): Graph {
@@ -174,6 +187,17 @@ function checkThresholds(model: Graph): string[] {
   if (typeof th.maxCycles === 'number') {
     const n = findCycles(model).length;
     if (n > th.maxCycles) out.push(`循環グループ ${n} > 上限 ${th.maxCycles}`);
+  }
+  const cov = model.coverage;
+  if (cov) {
+    // 「違反が無い」と「見えていないから出ない」は違う。解析の健全性も CI で見張る
+    const unresolved = cov.imports.unresolved + cov.rpcCalls.unresolved;
+    if (typeof th.maxUnresolved === 'number' && unresolved > th.maxUnresolved)
+      out.push(`未解決の参照 ${unresolved} > 上限 ${th.maxUnresolved}(strata doctor で内訳)`);
+    if (typeof th.maxAmbiguous === 'number' && cov.ambiguous > th.maxAmbiguous)
+      out.push(`曖昧で繋がなかった箇所 ${cov.ambiguous} > 上限 ${th.maxAmbiguous}`);
+    if (th.failOnReadError === true && cov.files.failed > 0)
+      out.push(`読めなかったファイル ${cov.files.failed} 件(解析が欠けています)`);
   }
   if (typeof th.maxInstability === 'number' || typeof th.maxEfferent === 'number') {
     for (const m of computeServiceMetrics(model)) {
@@ -284,6 +308,40 @@ function main(): void {
   }
 
   switch (command) {
+    case 'doctor': {
+      const model = loadModel(args.positional[0], refOf(args));
+      const c = model.coverage;
+      if (!c) {
+        console.error('このモデルには解析台帳がありません(古い model.json です)。scan し直してください');
+        process.exitCode = 1;
+        break;
+      }
+      const off = Object.entries(c.analyzers)
+        .filter(([, on]) => !on)
+        .map(([k]) => k);
+      console.log(`解析台帳: ${model.name}`);
+      console.log(`  ノード ${model.nodes.length} / エッジ ${model.edges.length}`);
+      console.log(`  読めたファイル ${c.files.read}  読めなかった ${c.files.failed}`);
+      console.log(
+        `  内部 import: 解決 ${c.imports.resolved} / 未解決 ${c.imports.unresolved}` +
+          (c.imports.viaArtifact > 0 ? ` / 生成物として説明済み ${c.imports.viaArtifact}` : ''),
+      );
+      console.log(
+        `  RPC 呼び出しの証拠 ${c.rpcCalls.evidence}(間接層で解決 ${c.rpcCalls.resolvedByIndirection} / 未解決 ${c.rpcCalls.unresolved})`,
+      );
+      console.log(`  候補が複数で繋がなかった箇所 ${c.ambiguous}`);
+      if (off.length > 0) {
+        console.log(`  無効なアナライザ: ${off.join(', ')} — この種の依存は最初から出ません`);
+      }
+      const gaps = c.files.failed + c.imports.unresolved + c.rpcCalls.unresolved + c.ambiguous;
+      console.log('');
+      console.log(
+        gaps === 0
+          ? '見えなかったと分かっている箇所はありません。ただし静的解析には原理的に届かない範囲(動的なパス組み立て・リフレクション・実行時のルーティング)があります。'
+          : `見えなかったと分かっている箇所: ${gaps} 件。この分だけ絵は不完全です。`,
+      );
+      break;
+    }
     case 'scan': {
       const ref = refOf(args);
       const target = args.positional[0] ?? '.';
@@ -296,6 +354,7 @@ function main(): void {
           `モデルを書き出しました: ${out} (ノード ${model.nodes.length} / エッジ ${model.edges.length})`,
         );
         if (model.warnings.length > 0) console.error(`警告 ${model.warnings.length} 件(モデル内 warnings 参照)`);
+        console.error(coverageLine(model));
       } else {
         console.log(json);
       }

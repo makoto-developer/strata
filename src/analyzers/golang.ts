@@ -453,6 +453,7 @@ export function linkGo(ctx: Ctx, state: GoState): void {
         if (looksInternal(importPath)) ctx.unresolvedImports.add(importPath);
         continue;
       }
+      if (looksInternal(importPath)) ctx.stats.importsResolved++;
       if (target.kind === 'pkg') {
         if (target.id !== file.pkgId) ctx.builder.addEdge(file.pkgId, target.id, 'import');
       } else {
@@ -540,6 +541,7 @@ export function linkGo(ctx: Ctx, state: GoState): void {
           continue;
         }
         if (candidates.length > 1) {
+          ctx.stats.ambiguous++;
           ctx.builder.warn(
             `RPC 名 '${member}' が複数の proto に一致するため接続をスキップ: ${file.wsRel}`,
           );

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "polyglot",
   "nodes": [
     {
@@ -265,5 +265,29 @@
   ],
   "warnings": [
     "間接層を越えた RPC 呼び出しを 2 件接続しました"
-  ]
+  ],
+  "coverage": {
+    "files": {
+      "read": 16,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 1,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 2,
+      "resolvedByIndirection": 2,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
 }

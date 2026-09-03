@@ -522,6 +522,24 @@
     render();
   }
 
+  /**
+   * 解析台帳のバッジ。「未解決 0 件」は「完全に解析できた」ではないので、
+   * 見えなかったと分かっている量と、無効なアナライザを常に見せる。
+   */
+  function coverageBadge() {
+    const c = model.coverage;
+    if (!c) return '';
+    const gaps = c.files.failed + c.imports.unresolved + c.rpcCalls.unresolved + c.ambiguous;
+    const off = Object.keys(c.analyzers).filter((k) => !c.analyzers[k]);
+    const tip =
+      `読めたファイル ${c.files.read} / 読めなかった ${c.files.failed}\n` +
+      `未解決の import ${c.imports.unresolved} ・ 未解決の RPC 呼び出し ${c.rpcCalls.unresolved} ・ 曖昧で繋がなかった箇所 ${c.ambiguous}\n` +
+      (off.length > 0 ? `無効なアナライザ: ${off.join(', ')}(この種の依存は最初から出ません)\n` : '') +
+      'この数は「見えなかったと分かっている量」です。動的なパス組み立てやリフレクションは、そもそも数えられません';
+    const cls = gaps > 0 ? 'cov-badge warn' : 'cov-badge';
+    return `<b class="${cls}" title="${esc(tip)}">解析 ${gaps === 0 ? '欠落なし' : `欠落 ${gaps}`}${off.length > 0 ? ` ・ 無効 ${off.length}` : ''}</b> ・ `;
+  }
+
   function persistHidden() {
     try {
       if (typeof localStorage !== 'undefined') {
@@ -851,6 +869,7 @@
       : '';
     statsEl.innerHTML =
       `${model.nodes.length} nodes ・ ${model.edges.length} deps ・ ` +
+      coverageBadge() +
       `<b class="cyc-badge" title="クリックすると循環しているノードの一覧を表示します">循環 ${cycleGroups.length}</b> ・ ` +
       `<b class="up-badge" title="レイヤー違反(下の層 → 上の層)の線の本数。ツールバーの「⚠ レイヤー違反のみ」で絞り込めます">上向き ${upCount}</b>` +
       hitBadge +
@@ -1566,7 +1585,9 @@
             callers.size === 0
               ? testN > 0
                 ? ` <span class="warnmark badge-test" title="本番コードからの呼び出しは未検出だが、テスト(${testN} ファイル)は呼んでいる">テストのみ</span>`
-                : ' <span class="warnmark badge-dead" title="呼び出し元が未検出(未使用の可能性)">未使用?</span>'
+                : ' <span class="warnmark badge-dead" title="このワークスペースの解析では呼び出し元を検出できませんでした。&#10;' +
+                  '「使われていない」とは限りません — 解析の対象外(別リポジトリ・外部の利用者)、動的なパス組み立て、' +
+                  'リフレクション経由の呼び出しは検出できません。削除の判断に使う前に strata doctor で解析の欠落を確認してください">呼び出し元 未検出</span>'
               : '';
           const shortLabel = label.includes('.') ? label.slice(label.indexOf('.') + 1) : label;
           const selected = state.apiRpc === id ? ' selected' : '';
@@ -1654,7 +1675,8 @@
               : ' <span class="warnmark badge-noimpl" title="ハンドラ / リゾルバの実装が未検出">実装なし</span>';
         const dead =
           callers.size === 0
-            ? ' <span class="warnmark badge-dead" title="呼び出し元が未検出(このリポジトリ内からは呼ばれていない)">呼び出し元なし</span>'
+            ? ' <span class="warnmark badge-dead" title="このワークスペースの解析では呼び出し元を検出できませんでした。&#10;' +
+              '解析対象外の利用者・動的な呼び出しは検出できないので、「使われていない」とは限りません">呼び出し元 未検出</span>'
             : '';
         const selected = state.apiRpc === n.id ? ' selected' : '';
         const surfaceHover =
@@ -1734,7 +1756,9 @@
       `<div class="frow chips"><label>使用状況</label><div class="chiprow">` +
       cycleChip(state.apiUsage, 'called', '本番で使用', '本番コードから呼ばれている RPC') +
       (state.apiExcludeTests ? '' : cycleChip(state.apiUsage, 'testonly', 'テストのみ', 'テストからだけ呼ばれている RPC')) +
-      cycleChip(state.apiUsage, 'dead', '未使用', 'どこからも呼ばれていない RPC(死んだ API 候補)') +
+      cycleChip(state.apiUsage, 'dead', '呼び出し元 未検出',
+        'この解析では呼び出し元が見つからなかった RPC。&#10;' +
+        '「未使用」の証明ではありません(解析対象外の利用者・動的な呼び出しは検出できません)') +
       `</div></div>` +
       `<div class="frow chips"><label>属性</label><div class="chiprow">` +
       cycleChip(state.apiAttrs, 'noimpl', '実装なし', '実装ハンドラが見つからない RPC') +

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "chain",
   "nodes": [
     {
@@ -402,5 +402,29 @@
     "生成クライアントへの import 2 件は Go のパッケージとしては解決できませんでしたが、間接層が呼び出し先の RPC を解決しています(警告ではありません)",
     "生成クライアント経由の構成で、サーバ実装を 2 件 RPC に接続しました(Unimplemented<Service>Server の埋め込みを証拠に同定)",
     "間接層を越えた RPC 呼び出しを 3 件接続しました"
-  ]
+  ],
+  "coverage": {
+    "files": {
+      "read": 24,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 2
+    },
+    "rpcCalls": {
+      "evidence": 3,
+      "resolvedByIndirection": 3,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
 }

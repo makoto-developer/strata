@@ -533,7 +533,10 @@ export function detectHttp(ctx: Ctx): void {
       ctx.builder.addEdge(from, targets[0], 'http', 1, site);
       continue;
     }
-    if (targets.length > 1) continue; // 曖昧: 誤接続を避けて張らない
+    if (targets.length > 1) {
+      ctx.stats.ambiguous++; // 曖昧: 誤接続を避けて張らない(取りこぼしとして数える)
+      continue;
+    }
     // どのルートにも当たらない絶対 URL は「外部システム」への送信として残す
     if (call.host && ctx.config.http?.externalHosts !== false) {
       ctx.builder.addNode({ id: EXT_OUT_ID, label: '外部への送信(HTTP)', kind: 'service', lang: 'http' });

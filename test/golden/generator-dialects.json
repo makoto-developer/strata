@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "generator-dialects",
   "nodes": [
     {
@@ -181,5 +181,29 @@
     "生成クライアント(生成物)を 3 個検出しました(署名で同定)",
     "生成クライアントへの import 1 件は Go のパッケージとしては解決できませんでしたが、間接層が呼び出し先の RPC を解決しています(警告ではありません)",
     "間接層を越えた RPC 呼び出しを 1 件接続しました"
-  ]
+  ],
+  "coverage": {
+    "files": {
+      "read": 6,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 1
+    },
+    "rpcCalls": {
+      "evidence": 1,
+      "resolvedByIndirection": 1,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
 }

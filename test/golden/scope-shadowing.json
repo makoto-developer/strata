@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "scope-shadowing",
   "nodes": [
     {
@@ -108,5 +108,29 @@
   ],
   "warnings": [
     "RPC 名 'Lookup' が複数の proto に一致するため接続をスキップ: app/app.go"
-  ]
+  ],
+  "coverage": {
+    "files": {
+      "read": 6,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 1,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 2,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
 }

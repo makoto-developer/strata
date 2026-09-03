@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "demo-platform",
   "nodes": [
     {
@@ -1853,5 +1853,29 @@
       ]
     }
   ],
-  "warnings": []
+  "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 142,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 13,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 5,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
 }

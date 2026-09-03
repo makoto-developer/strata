@@ -113,6 +113,35 @@ export interface Thresholds {
   maxCycles?: number; // 循環グループ数の上限
   maxInstability?: number; // 各サービスの不安定度 I の上限(0..1)
   maxEfferent?: number; // 各サービスの依存先数 Ce の上限
+  // 解析の健全性。ルール違反が「無い」のか「見えていないだけ」なのかを分けるため、
+  // 解析が届かなかった量そのものを CI で見張れるようにする
+  maxUnresolved?: number; // 未解決(import + RPC 呼び出し)の上限
+  maxAmbiguous?: number; // 候補が複数で繋がなかった箇所の上限
+  failOnReadError?: boolean; // 読めなかったファイルが 1 つでもあれば fail
+}
+
+/**
+ * 解析台帳。「どこまで見えているか」を数える。
+ *
+ * このツールの売りは「コードから導出するのでずれない」だが、静的解析には必ず
+ * 届かない範囲がある。届かなかったことが黙って消えると、利用者は不完全な絵を
+ * 完全だと思い込む。未解決 0 件は「完全に解析できた」を意味しない。
+ * だから「見えなかった量」を数えて、判断材料として出す。
+ */
+export interface Coverage {
+  files: { read: number; failed: number };
+  /** 内部 import。viaArtifact は Go のパッケージとしては解けないが間接層が説明したもの */
+  imports: { resolved: number; unresolved: number; viaArtifact: number };
+  /**
+   * RPC 呼び出しの証拠。evidence は間接層の入力なので、間接層が無効なら
+   * resolvedByIndirection は 0 になる(直接解決で繋がっている分は別)。
+   * 率を出すと構成で分母が変わって誤解を招くため、率ではなく件数で持つ
+   */
+  rpcCalls: { evidence: number; resolvedByIndirection: number; unresolved: number };
+  /** 候補が複数で「繋がなかった」回数。取りこぼしの明示 */
+  ambiguous: number;
+  /** 無効なアナライザがあれば、その種の依存は最初から出ない */
+  analyzers: { indirection: boolean; infra: boolean; http: boolean; graphql: boolean; messaging: boolean };
 }
 
 export interface Graph {
@@ -127,11 +156,12 @@ export interface Graph {
   thresholds?: Thresholds; // strata.config.json の thresholds(あれば埋め込む)
   ref?: string; // --ref で解析したときの git ref(作業ツリーを見たときは未設定)
   unresolved?: UnresolvedRef[]; // 解決できなかった参照(indirection / infra が有効なときのみ)
+  coverage?: Coverage; // 解析台帳(どこまで見えているか)
   schemaVersion?: number; // モデルスキーマ版。未設定は 1 とみなす(古い model.json の後方互換)
 }
 
 /** 現在のモデルスキーマ版。フィールドを追加・改名したら上げる。 */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** ツールのバージョン。リリースタグと package.json の version と必ず一致させる
  *  (test/cli.smoke.mjs が 3 者の一致を検査する)。 */

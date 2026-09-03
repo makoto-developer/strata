@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "ambiguous",
   "nodes": [
     {
@@ -155,5 +155,29 @@
   ],
   "warnings": [
     "間接層を越えた RPC 呼び出しを 1 件接続しました"
-  ]
+  ],
+  "coverage": {
+    "files": {
+      "read": 7,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 1,
+      "resolvedByIndirection": 1,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
 }

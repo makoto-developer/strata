@@ -2,7 +2,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Builder, type Graph } from './model.ts';
+import { Builder, type Coverage, type Graph } from './model.ts';
 import { stripSource } from './lex.ts';
 import { SKIP_DIRS, svcNodeId, serviceFor, isExcluded } from './context.ts';
 import type { ServiceConf, Config, Project, RpcInfo, Ctx } from './context.ts';
@@ -371,6 +371,35 @@ function reportUnresolvedImports(ctx: Ctx): void {
   );
 }
 
+/** 解析台帳を組み立てる。数えていない項目を推測で埋めない(0 と「見ていない」を混ぜない)。 */
+function buildCoverage(ctx: Ctx): Coverage {
+  let viaArtifact = 0;
+  for (const p of ctx.unresolvedImports) {
+    if (ctx.artifactDirs.some((dir) => importMatchesDir(p, dir))) viaArtifact++;
+  }
+  return {
+    files: { read: ctx.stats.filesRead, failed: ctx.stats.filesFailed },
+    imports: {
+      resolved: ctx.stats.importsResolved,
+      unresolved: ctx.unresolvedImports.size - viaArtifact,
+      viaArtifact,
+    },
+    rpcCalls: {
+      evidence: ctx.rpcCalls.length,
+      resolvedByIndirection: ctx.stats.rpcLinked,
+      unresolved: ctx.unresolved.filter((u) => u.reason === 'artifact').length,
+    },
+    ambiguous: ctx.stats.ambiguous,
+    analyzers: {
+      indirection: ctx.config.indirection?.enabled === true,
+      infra: ctx.config.infra?.enabled === true,
+      http: ctx.config.http?.enabled !== false,
+      graphql: ctx.config.graphql?.enabled !== false,
+      messaging: ctx.config.messaging !== undefined,
+    },
+  };
+}
+
 export function scan(rootDir: string): Graph {
   const rootAbs = path.resolve(rootDir);
   if (!fs.existsSync(rootAbs) || !fs.statSync(rootAbs).isDirectory()) {
@@ -390,6 +419,7 @@ export function scan(rootDir: string): Graph {
     goModulePrefixes: new Set(),
     goPkgImplServices: new Map(),
     unresolvedImports: new Set(),
+    stats: { filesRead: 0, filesFailed: 0, importsResolved: 0, ambiguous: 0, rpcLinked: 0 },
     artifactDirs: [],
     goImplTypeServices: new Map(),
     protoGoPackage: new Map(),
@@ -432,6 +462,7 @@ export function scan(rootDir: string): Graph {
 
   reportUnresolvedImports(ctx);
   const graph = builder.build(wsName, rootAbs);
+  graph.coverage = buildCoverage(ctx);
   if (ctx.unresolved.length > 0) graph.unresolved = ctx.unresolved;
   if (ctx.config.forbidden && ctx.config.forbidden.length > 0) {
     graph.rules = ctx.config.forbidden;

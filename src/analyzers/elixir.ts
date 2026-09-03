@@ -268,6 +268,7 @@ export function linkEx(ctx: Ctx, state: ExState): void {
         if (candidates.length === 1) {
           ctx.builder.addEdge(fromId, candidates[0].rpcId, 'rpc', 1, { f: file.id, l: i + 1 });
         } else if (candidates.length > 1) {
+          ctx.stats.ambiguous++;
           ctx.builder.warn(
             `Elixir: RPC '${service}.${rpcName}' が複数の proto に一致するため接続をスキップ: ${file.id}`,
           );
