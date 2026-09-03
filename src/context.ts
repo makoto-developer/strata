@@ -142,6 +142,11 @@ export interface Ctx {
   goPkgRelIndex: Map<string, Array<{ pkgId: string; project: string }>>; // モジュール相対パス → パッケージ
   goModulePrefixes: Set<string>; // 例 "github.com/makoto-developer"(内部っぽい未解決 import の警告用)
   goPkgImplServices: Map<string, Set<string>>; // pkgId -> Unimplemented<Service>Server を埋め込む service 名
+  // 解決できなかった内部 import。1 件ずつ警告すると 50 リポジトリで 1,000 行出て、
+  // 本物の警告が埋もれる。集計してから、間接層が説明できたものを除いて出す
+  unresolvedImports: Set<string>;
+  // 間接層が見つけた生成物のディレクトリ(未解決 import の説明に使う)
+  artifactDirs: string[];
   goImplTypeServices: Map<string, Set<string>>; // "pkgId#Type" -> その型が実装する service 名(複数埋め込みもある)
   // proto
   protoGoPackage: Map<string, string>; // go_package -> proto node id

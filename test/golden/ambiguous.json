@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 3,
+  "name": "ambiguous",
+  "nodes": [
+    {
+      "id": "caller",
+      "label": "caller",
+      "parent": "svc:caller",
+      "kind": "module",
+      "lang": "go",
+      "loc": 19,
+      "meta": {
+        "typeDefs": {
+          "Job": {
+            "f": "caller/job.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "caller#Job.Run",
+      "label": "Job.Run",
+      "parent": "caller",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "caller/job.go",
+        "line": 15,
+        "doc": "Run は帳票を書き出す。"
+      }
+    },
+    {
+      "id": "svc:caller",
+      "label": "caller",
+      "kind": "service"
+    },
+    {
+      "id": "team-a",
+      "label": "team-a",
+      "kind": "dir"
+    },
+    {
+      "id": "team-a/proto",
+      "label": "proto",
+      "parent": "team-a",
+      "kind": "dir"
+    },
+    {
+      "id": "team-a/proto/report.proto",
+      "label": "report.proto",
+      "parent": "team-a/proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "team_a.v1",
+        "services": [
+          "ReportService"
+        ],
+        "goPackage": "example.com/teams/a/proto",
+        "messages": {
+          "ExportRequest": 9,
+          "ExportResponse": 10
+        },
+        "file": "team-a/proto/report.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "team-a/proto/report.proto#ReportService.Export",
+      "label": "ReportService.Export",
+      "parent": "team-a/proto/report.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "team-a/proto/report.proto",
+        "line": 6,
+        "req": "ExportRequest",
+        "res": "ExportResponse"
+      }
+    },
+    {
+      "id": "team-b",
+      "label": "team-b",
+      "kind": "dir"
+    },
+    {
+      "id": "team-b/proto",
+      "label": "proto",
+      "parent": "team-b",
+      "kind": "dir"
+    },
+    {
+      "id": "team-b/proto/report.proto",
+      "label": "report.proto",
+      "parent": "team-b/proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "team_b.v1",
+        "services": [
+          "ReportService"
+        ],
+        "goPackage": "example.com/teams/b/proto",
+        "messages": {
+          "ExportRequest": 9,
+          "ExportResponse": 10
+        },
+        "file": "team-b/proto/report.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "team-b/proto/report.proto#ReportService.Export",
+      "label": "ReportService.Export",
+      "parent": "team-b/proto/report.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "team-b/proto/report.proto",
+        "line": 6,
+        "req": "ExportRequest",
+        "res": "ExportResponse"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "caller",
+      "to": "team-b/proto/report.proto#ReportService.Export",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "caller/job.go",
+          "l": 16
+        }
+      ]
+    },
+    {
+      "from": "caller#Job.Run",
+      "to": "team-b/proto/report.proto#ReportService.Export",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "caller/job.go",
+          "l": 16
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "間接層を越えた RPC 呼び出しを 1 件接続しました"
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 3,
+  "name": "handwritten-client",
+  "nodes": [
+    {
+      "id": "app",
+      "label": "handwritten",
+      "parent": "svc:app",
+      "kind": "module",
+      "lang": "go",
+      "loc": 25,
+      "meta": {
+        "typeDefs": {
+          "UserServiceClient": {
+            "f": "app/app.go",
+            "l": 7
+          },
+          "mockUserServiceClient": {
+            "f": "app/app.go",
+            "l": 11
+          },
+          "App": {
+            "f": "app/app.go",
+            "l": 17
+          }
+        }
+      }
+    },
+    {
+      "id": "app#App.Show",
+      "label": "App.Show",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "app/app.go",
+        "line": 22,
+        "doc": "Show は利用者名を返す。"
+      }
+    },
+    {
+      "id": "app#mockUserServiceClient.GetUser",
+      "label": "mockUserServiceClient.GetUser",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "app/app.go",
+        "line": 13
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user.proto",
+      "label": "user.proto",
+      "parent": "proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "acme.user.v1",
+        "services": [
+          "UserService"
+        ],
+        "goPackage": "example.com/acme/proto/user",
+        "messages": {
+          "GetUserRequest": 9,
+          "GetUserResponse": 10
+        },
+        "file": "proto/user.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/user.proto#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "proto/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user.proto",
+        "line": 6,
+        "req": "GetUserRequest",
+        "res": "GetUserResponse"
+      }
+    },
+    {
+      "id": "svc:app",
+      "label": "app",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app#App.Show",
+      "to": "app#mockUserServiceClient.GetUser",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 23
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "unresolved": [
+    {
+      "reason": "artifact",
+      "from": "app",
+      "detail": "UserService.GetUser",
+      "file": "app/app.go",
+      "line": 23,
+      "hint": "UserService.GetUser は型注釈だけで掴まれており、生成クライアントである証拠がありません(手書き interface やモックと区別できないため繋いでいません)"
+    }
+  ]
+}

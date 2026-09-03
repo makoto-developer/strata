@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 3,
+  "name": "versioned-api",
+  "nodes": [
+    {
+      "id": "app",
+      "label": "app",
+      "parent": "svc:app",
+      "kind": "module",
+      "lang": "go",
+      "loc": 19,
+      "meta": {
+        "typeDefs": {
+          "App": {
+            "f": "app/app.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "app#App.Show",
+      "label": "App.Show",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "app/app.go",
+        "line": 15,
+        "doc": "Show は利用者を表示する。"
+      }
+    },
+    {
+      "id": "artifact:gen/user/v2",
+      "label": "v2",
+      "parent": "gen/user",
+      "kind": "artifact",
+      "meta": {
+        "file": "gen/user/v2/user_grpc.pb.go",
+        "line": 1,
+        "pkg": "acme.user.v2",
+        "services": [
+          "UserService"
+        ]
+      }
+    },
+    {
+      "id": "gen",
+      "label": "gen",
+      "kind": "dir"
+    },
+    {
+      "id": "gen/user",
+      "label": "user",
+      "parent": "gen",
+      "kind": "dir"
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user",
+      "label": "user",
+      "parent": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v1",
+      "label": "v1",
+      "parent": "proto/user",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v1/user.proto",
+      "label": "user.proto",
+      "parent": "proto/user/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "acme.user.v1",
+        "services": [
+          "UserService"
+        ],
+        "goPackage": "example.com/acme/proto/user/v1",
+        "messages": {
+          "GetUserRequest": 9,
+          "GetUserResponse": 10
+        },
+        "file": "proto/user/v1/user.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/user/v1/user.proto#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "proto/user/v1/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v1/user.proto",
+        "line": 6,
+        "req": "GetUserRequest",
+        "res": "GetUserResponse"
+      }
+    },
+    {
+      "id": "proto/user/v2",
+      "label": "v2",
+      "parent": "proto/user",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v2/user.proto",
+      "label": "user.proto",
+      "parent": "proto/user/v2",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "acme.user.v2",
+        "services": [
+          "UserService"
+        ],
+        "goPackage": "example.com/acme/proto/user/v2",
+        "messages": {
+          "GetUserRequest": 9,
+          "GetUserResponse": 10
+        },
+        "file": "proto/user/v2/user.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/user/v2/user.proto#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "proto/user/v2/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v2/user.proto",
+        "line": 6,
+        "req": "GetUserRequest",
+        "res": "GetUserResponse"
+      }
+    },
+    {
+      "id": "svc:app",
+      "label": "app",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "proto/user/v2/user.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 16
+        }
+      ],
+      "via": [
+        "artifact:gen/user/v2"
+      ]
+    },
+    {
+      "from": "app#App.Show",
+      "to": "proto/user/v2/user.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 16
+        }
+      ],
+      "via": [
+        "artifact:gen/user/v2"
+      ]
+    },
+    {
+      "from": "proto/user/v2/user.proto",
+      "to": "artifact:gen/user/v2",
+      "count": 1,
+      "kind": "generates"
+    }
+  ],
+  "warnings": [
+    "生成クライアント(生成物)を 1 個検出しました(署名で同定)",
+    "生成クライアントへの import 1 件は Go のパッケージとしては解決できませんでしたが、間接層が呼び出し先の RPC を解決しています(警告ではありません)",
+    "間接層を越えた RPC 呼び出しを 1 件接続しました"
+  ]
+}

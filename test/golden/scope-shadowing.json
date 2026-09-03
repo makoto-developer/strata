@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 3,
+  "name": "scope-shadowing",
+  "nodes": [
+    {
+      "id": "app",
+      "label": "shadow",
+      "parent": "svc:app",
+      "kind": "module",
+      "lang": "go",
+      "loc": 23,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "app#lookupAdmin",
+      "label": "lookupAdmin",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 5,
+      "meta": {
+        "file": "app/app.go",
+        "line": 18,
+        "doc": "lookupAdmin は管理者を引く。"
+      }
+    },
+    {
+      "id": "app#lookupUser",
+      "label": "lookupUser",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 5,
+      "meta": {
+        "file": "app/app.go",
+        "line": 11,
+        "doc": "lookupUser は利用者を引く。"
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/ops.proto",
+      "label": "ops.proto",
+      "parent": "proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 15,
+      "meta": {
+        "pkg": "acme.ops.v1",
+        "services": [
+          "UserService",
+          "AdminService"
+        ],
+        "goPackage": "example.com/acme/proto/ops",
+        "messages": {
+          "LookupRequest": 13,
+          "LookupResponse": 14
+        },
+        "file": "proto/ops.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/ops.proto#AdminService.Lookup",
+      "label": "AdminService.Lookup",
+      "parent": "proto/ops.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/ops.proto",
+        "line": 10,
+        "req": "LookupRequest",
+        "res": "LookupResponse"
+      }
+    },
+    {
+      "id": "proto/ops.proto#UserService.Lookup",
+      "label": "UserService.Lookup",
+      "parent": "proto/ops.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/ops.proto",
+        "line": 6,
+        "req": "LookupRequest",
+        "res": "LookupResponse"
+      }
+    },
+    {
+      "id": "svc:app",
+      "label": "app",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "proto/ops.proto",
+      "count": 1,
+      "kind": "proto"
+    }
+  ],
+  "warnings": [
+    "RPC 名 'Lookup' が複数の proto に一致するため接続をスキップ: app/app.go"
+  ]
+}

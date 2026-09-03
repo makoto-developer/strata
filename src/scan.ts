@@ -24,6 +24,7 @@ import { detectGraphql } from './analyzers/graphql.ts';
 import { collectRpcCallEvidence } from './rpc-call-evidence.ts';
 import { resolveIndirection } from './indirection.ts';
 import { markViolations } from './rules.ts';
+import { importMatchesDir } from './indirection.ts';
 
 /**
  * 言語アナライザの登録(register)→接続(link)の 2 相を表す。
@@ -344,6 +345,32 @@ export function discover(rootAbs: string): { config: Config; projects: Project[]
   return { config, projects: projectList, builder, wsName };
 }
 
+/**
+ * 解決できなかった内部 import を 1 本の警告にまとめる。
+ * 1 件ずつ出すと 50 リポジトリで 1,000 行になり、本物の警告が埋もれる。
+ * 生成物への import は間接層が後で解決しているので、警告から外す(嘘の警告になる)。
+ */
+function reportUnresolvedImports(ctx: Ctx): void {
+  if (ctx.unresolvedImports.size === 0) return;
+  const explained: string[] = [];
+  const rest: string[] = [];
+  for (const p of [...ctx.unresolvedImports].sort()) {
+    (ctx.artifactDirs.some((dir) => importMatchesDir(p, dir)) ? explained : rest).push(p);
+  }
+  if (explained.length > 0) {
+    ctx.builder.warn(
+      `生成クライアントへの import ${explained.length} 件は Go のパッケージとしては解決できませんでしたが、` +
+        `間接層が呼び出し先の RPC を解決しています(警告ではありません)`,
+    );
+  }
+  if (rest.length === 0) return;
+  const head = rest.slice(0, 5).join(', ');
+  ctx.builder.warn(
+    `import が解決できません(module 名との不一致?): ${rest.length} 件 — ${head}` +
+      (rest.length > 5 ? ` …他 ${rest.length - 5} 件` : ''),
+  );
+}
+
 export function scan(rootDir: string): Graph {
   const rootAbs = path.resolve(rootDir);
   if (!fs.existsSync(rootAbs) || !fs.statSync(rootAbs).isDirectory()) {
@@ -362,6 +389,8 @@ export function scan(rootDir: string): Graph {
     goPkgRelIndex: new Map(),
     goModulePrefixes: new Set(),
     goPkgImplServices: new Map(),
+    unresolvedImports: new Set(),
+    artifactDirs: [],
     goImplTypeServices: new Map(),
     protoGoPackage: new Map(),
     protoGoPackageSuffix: new Map(),
@@ -401,6 +430,7 @@ export function scan(rootDir: string): Graph {
   resolveIndirection(ctx);
   resolveInfraTopics(ctx); // 環境変数経由のトピック名を IaC から逆引きする
 
+  reportUnresolvedImports(ctx);
   const graph = builder.build(wsName, rootAbs);
   if (ctx.unresolved.length > 0) graph.unresolved = ctx.unresolved;
   if (ctx.config.forbidden && ctx.config.forbidden.length > 0) {

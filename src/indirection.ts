@@ -384,6 +384,9 @@ export function resolveIndirection(ctx: Ctx): void {
   if (!ctx.config.indirection?.enabled) return;
   const index = buildRpcIndex(ctx);
   const artifacts = discoverGeneratedArtifacts(ctx.rootAbs, ctx.config);
+  // 生成物の置き場所を残す。「解決できない import」の多くはここへの import なので、
+  // 説明が付いたものを警告から外すのに使う
+  for (const a of artifacts) ctx.artifactDirs.push(a.dir);
   registerArtifacts(ctx, artifacts, index);
   const recovered = registerArtifactOnlyRpcs(ctx, artifacts, index);
   const impls = linkServerImpls(ctx, index);

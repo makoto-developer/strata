@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 3,
+  "name": "vendored-client",
+  "nodes": [
+    {
+      "id": "app",
+      "label": "app",
+      "parent": "svc:storefront",
+      "kind": "module",
+      "lang": "go",
+      "loc": 22,
+      "meta": {
+        "typeDefs": {
+          "Handler": {
+            "f": "app/handler.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "app#Handler.Show",
+      "label": "Handler.Show",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 7,
+      "meta": {
+        "file": "app/handler.go",
+        "line": 15,
+        "doc": "Show は商品を 1 件表示する。"
+      }
+    },
+    {
+      "id": "artifact:vendor/example.com/thirdparty/catalogclient",
+      "label": "catalogclient",
+      "parent": "vendor/example.com/thirdparty",
+      "kind": "artifact",
+      "meta": {
+        "file": "vendor/example.com/thirdparty/catalogclient/catalog_grpc.pb.go",
+        "line": 1,
+        "pkg": "retail.catalog.v1",
+        "services": [
+          "CatalogService"
+        ]
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/catalog",
+      "label": "catalog",
+      "parent": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/catalog/v1",
+      "label": "v1",
+      "parent": "proto/catalog",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/catalog/v1/catalog.proto",
+      "label": "catalog.proto",
+      "parent": "proto/catalog/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "retail.catalog.v1",
+        "services": [
+          "CatalogService"
+        ],
+        "goPackage": "example.com/retail/proto/catalog/v1",
+        "messages": {
+          "GetItemRequest": 9,
+          "GetItemResponse": 10
+        },
+        "file": "proto/catalog/v1/catalog.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/catalog/v1/catalog.proto#CatalogService.GetItem",
+      "label": "CatalogService.GetItem",
+      "parent": "proto/catalog/v1/catalog.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/catalog/v1/catalog.proto",
+        "line": 6,
+        "req": "GetItemRequest",
+        "res": "GetItemResponse"
+      }
+    },
+    {
+      "id": "svc:storefront",
+      "label": "storefront",
+      "kind": "service"
+    },
+    {
+      "id": "vendor",
+      "label": "vendor",
+      "kind": "dir"
+    },
+    {
+      "id": "vendor/example.com",
+      "label": "example.com",
+      "parent": "vendor",
+      "kind": "dir"
+    },
+    {
+      "id": "vendor/example.com/thirdparty",
+      "label": "thirdparty",
+      "parent": "vendor/example.com",
+      "kind": "dir"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "proto/catalog/v1/catalog.proto#CatalogService.GetItem",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/handler.go",
+          "l": 16
+        }
+      ],
+      "via": [
+        "artifact:vendor/example.com/thirdparty/catalogclient"
+      ]
+    },
+    {
+      "from": "app#Handler.Show",
+      "to": "proto/catalog/v1/catalog.proto#CatalogService.GetItem",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/handler.go",
+          "l": 16
+        }
+      ],
+      "via": [
+        "artifact:vendor/example.com/thirdparty/catalogclient"
+      ]
+    },
+    {
+      "from": "proto/catalog/v1/catalog.proto",
+      "to": "artifact:vendor/example.com/thirdparty/catalogclient",
+      "count": 1,
+      "kind": "generates"
+    }
+  ],
+  "warnings": [
+    "生成クライアント(生成物)を 1 個検出しました(署名で同定)",
+    "間接層を越えた RPC 呼び出しを 1 件接続しました"
+  ]
+}

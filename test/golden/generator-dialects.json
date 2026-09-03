@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 3,
+  "name": "generator-dialects",
+  "nodes": [
+    {
+      "id": "app",
+      "label": "dialects",
+      "parent": "svc:app",
+      "kind": "module",
+      "lang": "go",
+      "loc": 19,
+      "meta": {
+        "typeDefs": {
+          "App": {
+            "f": "app/app.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "app#App.Post",
+      "label": "App.Post",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "app/app.go",
+        "line": 15,
+        "doc": "Post はメッセージを送る。"
+      }
+    },
+    {
+      "id": "artifact:ex-client",
+      "label": "ex-client",
+      "kind": "artifact",
+      "meta": {
+        "file": "ex-client/chat.pb.ex",
+        "line": 1,
+        "pkg": "acme.chat.v1",
+        "services": [
+          "ChatService"
+        ]
+      }
+    },
+    {
+      "id": "artifact:py-client",
+      "label": "py-client",
+      "kind": "artifact",
+      "meta": {
+        "file": "py-client/chat_pb2_grpc.py",
+        "line": 1,
+        "pkg": "acme.chat.v1",
+        "services": [
+          "ChatService"
+        ]
+      }
+    },
+    {
+      "id": "artifact:ts-client",
+      "label": "ts-client",
+      "kind": "artifact",
+      "meta": {
+        "file": "ts-client/chat_connect.ts",
+        "line": 1,
+        "pkg": "acme.chat.v1",
+        "services": [
+          "ChatService"
+        ]
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/chat",
+      "label": "chat",
+      "parent": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/chat/v1",
+      "label": "v1",
+      "parent": "proto/chat",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/chat/v1/chat.proto",
+      "label": "chat.proto",
+      "parent": "proto/chat/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "acme.chat.v1",
+        "services": [
+          "ChatService"
+        ],
+        "goPackage": "example.com/acme/proto/chat/v1",
+        "messages": {
+          "SendRequest": 9,
+          "SendResponse": 10
+        },
+        "file": "proto/chat/v1/chat.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/chat/v1/chat.proto#ChatService.Send",
+      "label": "ChatService.Send",
+      "parent": "proto/chat/v1/chat.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/chat/v1/chat.proto",
+        "line": 6,
+        "req": "SendRequest",
+        "res": "SendResponse"
+      }
+    },
+    {
+      "id": "svc:app",
+      "label": "app",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "proto/chat/v1/chat.proto#ChatService.Send",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 16
+        }
+      ],
+      "via": [
+        "artifact:ts-client"
+      ]
+    },
+    {
+      "from": "app#App.Post",
+      "to": "proto/chat/v1/chat.proto#ChatService.Send",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 16
+        }
+      ],
+      "via": [
+        "artifact:ts-client"
+      ]
+    },
+    {
+      "from": "proto/chat/v1/chat.proto",
+      "to": "artifact:ex-client",
+      "count": 1,
+      "kind": "generates"
+    },
+    {
+      "from": "proto/chat/v1/chat.proto",
+      "to": "artifact:py-client",
+      "count": 1,
+      "kind": "generates"
+    },
+    {
+      "from": "proto/chat/v1/chat.proto",
+      "to": "artifact:ts-client",
+      "count": 1,
+      "kind": "generates"
+    }
+  ],
+  "warnings": [
+    "生成クライアント(生成物)を 3 個検出しました(署名で同定)",
+    "生成クライアントへの import 1 件は Go のパッケージとしては解決できませんでしたが、間接層が呼び出し先の RPC を解決しています(警告ではありません)",
+    "間接層を越えた RPC 呼び出しを 1 件接続しました"
+  ]
+}

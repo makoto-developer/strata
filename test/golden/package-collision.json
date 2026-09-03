@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 3,
+  "name": "package-collision",
+  "nodes": [
+    {
+      "id": "app",
+      "label": "collision",
+      "parent": "svc:app",
+      "kind": "module",
+      "lang": "go",
+      "loc": 19,
+      "meta": {
+        "typeDefs": {
+          "App": {
+            "f": "app/app.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "app#App.Lookup",
+      "label": "App.Lookup",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "app/app.go",
+        "line": 15,
+        "doc": "Lookup は提携先に利用者を問い合わせる。"
+      }
+    },
+    {
+      "id": "artifact:vendor/example.com/partner/partnerclient",
+      "label": "partnerclient",
+      "parent": "vendor/example.com/partner",
+      "kind": "artifact",
+      "meta": {
+        "file": "vendor/example.com/partner/partnerclient/user_grpc.pb.go",
+        "line": 1,
+        "pkg": "partner.identity.v1",
+        "services": [
+          "UserService"
+        ]
+      }
+    },
+    {
+      "id": "artifact:vendor/example.com/partner/partnerclient#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "artifact:vendor/example.com/partner/partnerclient",
+      "kind": "rpc",
+      "meta": {
+        "file": "vendor/example.com/partner/partnerclient/user_grpc.pb.go",
+        "line": 1,
+        "generated": true,
+        "pkg": "partner.identity.v1"
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/identity.proto",
+      "label": "identity.proto",
+      "parent": "proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "acme.identity.v1",
+        "services": [
+          "UserService"
+        ],
+        "goPackage": "example.com/acme/proto/identity",
+        "messages": {
+          "GetUserRequest": 9,
+          "GetUserResponse": 10
+        },
+        "file": "proto/identity.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/identity.proto#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "proto/identity.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/identity.proto",
+        "line": 6,
+        "req": "GetUserRequest",
+        "res": "GetUserResponse"
+      }
+    },
+    {
+      "id": "svc:app",
+      "label": "app",
+      "kind": "service"
+    },
+    {
+      "id": "vendor",
+      "label": "vendor",
+      "kind": "dir"
+    },
+    {
+      "id": "vendor/example.com",
+      "label": "example.com",
+      "parent": "vendor",
+      "kind": "dir"
+    },
+    {
+      "id": "vendor/example.com/partner",
+      "label": "partner",
+      "parent": "vendor/example.com",
+      "kind": "dir"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "artifact:vendor/example.com/partner/partnerclient#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 16
+        }
+      ],
+      "via": [
+        "artifact:vendor/example.com/partner/partnerclient"
+      ]
+    },
+    {
+      "from": "app#App.Lookup",
+      "to": "artifact:vendor/example.com/partner/partnerclient#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 16
+        }
+      ],
+      "via": [
+        "artifact:vendor/example.com/partner/partnerclient"
+      ]
+    }
+  ],
+  "warnings": [
+    "元 proto が見つからない生成物から RPC 定義を 1 件復元しました",
+    "生成クライアント(生成物)を 1 個検出しました(署名で同定)",
+    "間接層を越えた RPC 呼び出しを 1 件接続しました"
+  ]
+}

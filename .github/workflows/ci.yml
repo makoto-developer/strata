@@ -24,7 +24,34 @@ jobs:
         run: npm run typecheck
       - name: "リント (このリポジトリの約束事)"
         run: npm run lint
-      - name: "テスト (CLI・解析エンジン + ビューア/サーバの DOM/HTTP スモーク)"
+      - name: "テスト (CLI・解析エンジン + ビューア/サーバの DOM/HTTP スモーク + モデルの回帰)"
         run: npm test
       - name: "ドキュメントの整合性 (front matter・ナビ・内部リンク)"
         run: node scripts/check-docs.mjs
+
+  # 実ブラウザでの描画・操作。文字切れ・要素の重なり・押しても動かないボタンは
+  # DOM スタブでは捕まらない(実際に何度も取りこぼしている)ので、CI で毎回回す。
+  viewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: "Playwright と Chromium を用意 (監査ツールは本体の依存にしない)"
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: "ビューアを起動して実ブラウザで監査"
+        run: |
+          node src/cli.ts serve examples/demo --port 7333 &
+          node -e '
+            const wait = async () => {
+              for (let i = 0; i < 60; i++) {
+                try { if ((await fetch("http://127.0.0.1:7333/")).ok) return; } catch {}
+                await new Promise((r) => setTimeout(r, 500));
+              }
+              throw new Error("ビューアが起動しません");
+            };
+            wait();
+          '
+          node scripts/audit-viewer.mjs http://127.0.0.1:7333/

@@ -448,10 +448,9 @@ export function linkGo(ctx: Ctx, state: GoState): void {
     for (const importPath of file.importPaths) {
       const target = resolve(importPath);
       if (!target) {
-        // 標準ライブラリ・外部モジュールは対象外。内部っぽいのに解決できないものは警告
-        if (looksInternal(importPath)) {
-          ctx.builder.warn(`import が解決できません(module 名との不一致?): ${importPath}`);
-        }
+        // 標準ライブラリ・外部モジュールは対象外。内部っぽいのに解決できないものは覚えておく
+        // (ここで 1 件ずつ警告すると数百〜千行になり、しかもその多くは間接層が後で解決する)
+        if (looksInternal(importPath)) ctx.unresolvedImports.add(importPath);
         continue;
       }
       if (target.kind === 'pkg') {

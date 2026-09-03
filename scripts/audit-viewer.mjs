@@ -15,7 +15,11 @@
 import { chromium } from 'playwright';
 
 const url = process.argv[2];
-const browser = await chromium.launch({ channel: 'chrome' });
+// 手元では OS の Chrome を使う(ダウンロード不要)。CI には Chrome が無いので、
+// 落ちたら playwright が入れた Chromium にフォールバックする
+const browser = await chromium
+  .launch({ channel: 'chrome' })
+  .catch(() => chromium.launch());
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await ctx.newPage();
 const errors = [];
