@@ -16,7 +16,7 @@ class Strata < Formula
   homepage "https://makoto-developer.github.io/strata/"
   url "https://github.com/makoto-developer/strata/archive/refs/tags/v0.1.4.tar.gz"
   version "0.1.4"
-  sha256 "PENDING"
+  sha256 "ad0b7ee9d6528f90404c5ce4a77ad5709a05b2bbf84cf0e4f7d5019c4c93b0cf"
   license "AGPL-3.0-only"
 
   depends_on "node"
