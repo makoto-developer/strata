@@ -194,72 +194,8 @@ Go/Python 等のツールチェーンは**不要**(テキスト・構文レベ�
 
 ## インストール
 
-配布は **GitHub 公開のみ**(npm には公開していません)。
-
-### macOS(Apple Silicon)アプリ — 端末を使わない人はこれ
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/makoto-developer/strata/main/install.sh | bash
-```
-
-これだけで `/Applications/Strata.app` に入ります。あとは Launchpad や Finder から
-**ダブルクリックするだけ**です。インストーラは dmg を取得してチェックサムを照合し、
-配置したうえで隔離属性を外します([中身はこちら](install.sh))。
-
-ダブルクリックすると:
-
-1. 初回はフォルダ選択が出るので、解析したいリポジトリを選ぶ(2 回目以降は前回のフォルダで起動)
-2. ビューアが既定のブラウザで開く
-3. 小さなウィンドウが残るので、終わるときは「終了」を押す(サーバも一緒に止まります)
-
-別のリポジトリに切り替えたいときは、そのウィンドウの「別のフォルダ…」か、
-ビューアの「プロジェクト」タブから追加・切り替えができます。
-
-アプリの中には CLI も同梱しています。端末からも使いたい場合はこれを PATH に置けます:
-
-```sh
-sudo ln -sf /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
-strata --version
-```
-
-<details>
-<summary>dmg を手で入れたい場合(インストーラを使わないとき)</summary>
-
-[最新リリース](https://github.com/makoto-developer/strata/releases/latest)の
-`Strata-macos-arm64.dmg` を開き、`Strata.app` を `Applications` へドラッグしたあと、
-**次の 1 行が必要です**。
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Strata.app
-```
-
-これをしないと「"Strata"は壊れているため開けません。ゴミ箱に入れる必要があります。」と出ます。
-アプリが壊れているわけではなく(署名の検証自体は通ります)、Apple の**公証を受けていない**ためです。
-ダウンロード時に付く隔離属性があると macOS がこう表示します。
-**macOS 15 (Sequoia) 以降では「右クリック → 開く」では回避できません**(Apple が廃止したため)。
-上の 1 行インストーラは、この手順まで済ませます。
-
-</details>
-
-### macOS(Apple Silicon)バイナリ — CLI だけ欲しい人はこれ
-
-Node.js のインストール不要。ランタイム同梱の単一実行ファイルです。
-
-```sh
-curl -fsSL https://github.com/makoto-developer/strata/releases/latest/download/strata-macos-arm64.tar.gz | tar xz
-sudo mv strata /usr/local/bin/
-strata --version
-```
-
-| 項目 | サポート |
-| --- | --- |
-| OS | **macOS 13 Ventura 以降** |
-| CPU | **Apple Silicon(M1 / M2 / M3 / M4 …)**。Intel Mac 用は提供していません |
-| 同梱ランタイム | Node.js v24.18.0 |
-
-ad-hoc 署名のみ(Apple の公証なし)です。ブラウザでダウンロードした場合は
-`xattr -d com.apple.quarantine ./strata` で隔離属性を外してください。
-Intel Mac / Linux / Windows では下記の git clone 版を使ってください(機能は同じです)。
+配布は **GitHub 公開のみ**(npm には公開していません)。ビルド済みバイナリは現在配布していないため、
+いずれもソースから入ります。ビルド不要・実行時依存ゼロなので、`node` さえあれば動きます。
 
 ### Homebrew
 
@@ -274,8 +210,7 @@ strata serve /path/to/your-monorepo
 
 > `brew trust` を省くと `Refusing to load formula from untrusted tap` で止まります。
 > 新しめの Homebrew が、公式以外の tap を既定では読み込まなくなったためです。
-> Apple Silicon では Node.js 同梱のバイナリが、Intel Mac / Linux ではソース + Homebrew の
-> `node` が入ります(いずれも同じ機能です)。
+> ソースから入り、Homebrew の `node` を使います(OS・CPU を問わず同じ構成です)。
 
 ### mise / asdf(Node を用意して git 導入)
 
