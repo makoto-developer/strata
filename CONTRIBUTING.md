@@ -52,7 +52,7 @@ npm run typecheck     # tsc --noEmit(エラー 0 件を維持)
 ```
 
 `npm install` は**開発でも基本的に不要**です(devDependencies は typecheck 用の
-typescript / @types/node のみ)。スクリーンショット確認やバイナリビルドのときだけ、
+typescript / @types/node のみ)。スクリーンショット確認のときだけ、
 `npm install --no-save playwright` のように都度入れます。
 
 ## この 4 つを守ってもらえると助かります
@@ -183,4 +183,4 @@ npm run check     # 型チェック → リント → テスト → ドキュメ
 | `web/` | ビューア(素の HTML / CSS / JS) |
 | `docs/` | 仕様書とドキュメントサイト(GitHub Pages) |
 | `test/` | スモークテスト |
-| `scripts/` | 開発補助(デモ録画・スクリーンショット・バイナリビルド) |
+| `scripts/` | 開発補助(デモ録画・スクリーンショット・ドキュメント検査) |

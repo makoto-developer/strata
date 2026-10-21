@@ -641,7 +641,7 @@ function checkNodeVersion(): void {
   const minor = Number(m[2]);
   if (major < 22 || (major === 22 && minor < 18)) {
     console.error(
-      `Strata は Node.js 22.18 以上が必要です(現在 ${process.versions.node})。\n` +
+      `Strata は Node.js 22.18 以上の 22 系、または 24 以上が必要です(現在 ${process.versions.node})。\n` +
         `TypeScript を直接実行するため、より新しい Node を利用してください。`,
     );
     process.exit(1);

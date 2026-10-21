@@ -7,7 +7,7 @@
 #
 # 利用者としてのインストール(GitHub 公開のみ):
 #   mise は Node ランタイムの供給に使い、Strata 本体は Homebrew か git 導入を推奨。
-#   asdf は `asdf install nodejs latest:24` で入れ、`.tool-versions` には
-#   解決後の完全なバージョンを書く(部分指定は受け付けない)。
+#   asdf は `asdf install nodejs latest:24` で入れたあと
+#   `asdf set -u nodejs latest:24` で使う版を選ぶ(install だけでは選択されない)。
 [tools]
 node = "24"
