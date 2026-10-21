@@ -1,25 +1,20 @@
-# タグ(v*)を push すると macOS(Apple Silicon)向けの単一実行ファイルを作って Release に添付する。
+# タグ(v*)を push すると Release を作り、自動生成の変更履歴に導入手順を足す。
 #
-# ビルドは Apple Silicon の runner(macos-14 以降は arm64)で行う。
-# 実行ファイルの土台には CI の Node ではなく**公式ビルドの Node を固定バージョンで**使う
-# (ディストリビューション版は SEA が無効化されていることがあるため)。
+# アセットは添付しない。配布はソース導入(Homebrew / git clone)に一本化してあり、
+# Homebrew が参照するソース tarball は GitHub がタグから自動生成するため。
+# タグ push では ci.yml が走らない(push: [main] のため)ので、検査はここで回す。
 name: release
 
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: '手動実行時に添付するタグ(省略時はドラフトのみ作成)'
-        required: false
 
 permissions:
   contents: write
 
 jobs:
-  macos-arm64:
-    runs-on: macos-14 # Apple Silicon
+  release:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -37,54 +32,17 @@ jobs:
           npm test
           node scripts/check-docs.mjs
 
-      - name: ビルド用ツールを一時的に入れる
-        run: npm install --no-save esbuild postject
-
-      - name: 単一実行ファイルをビルド
-        run: node scripts/build-binary.mjs --tar
-
-      - name: アプリバンドル(Strata.app)と dmg をビルド
-        run: node scripts/build-app.mjs --dmg
-
-      - name: 生成物を確認
-        run: |
-          ls -lh dist/bin dist/app
-          file dist/bin/strata
-          ./dist/bin/strata --version
-          # アプリの実行ファイルがランチャー(スクリプト)であること。
-          # ケースインセンシティブな FS で本体バイナリに上書きされる事故を検出する
-          file dist/app/Strata.app/Contents/MacOS/Strata | grep -q 'shell script'
-          ./dist/app/Strata.app/Contents/MacOS/strata-cli --version
-          codesign --verify --deep --strict dist/app/Strata.app
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: strata-macos-arm64
-          path: |
-            dist/bin/strata-macos-arm64.tar.gz
-            dist/bin/strata-macos-arm64.tar.gz.sha256
-            dist/app/Strata-macos-arm64.dmg
-            dist/app/Strata-macos-arm64.dmg.sha256
-
-      - name: Release に添付
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Release を作る
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 変更履歴は GitHub の自動生成を使い、その下にインストール手順・サポート範囲を足す
+          # 変更履歴は GitHub の自動生成を使い、その下に導入手順・サポート範囲を足す
+          notes="${RUNNER_TEMP}/notes.md"
           gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-            -f tag_name="${GITHUB_REF_NAME}" --jq .body > /tmp/notes.md || echo '' > /tmp/notes.md
-          printf '\n\n' >> /tmp/notes.md
-          cat .github/release-notes-footer.md >> /tmp/notes.md
+            -f tag_name="${GITHUB_REF_NAME}" --jq .body > "$notes" || : > "$notes"
+          printf '\n\n' >> "$notes"
+          cat .github/release-notes-footer.md >> "$notes"
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
-            --notes-file /tmp/notes.md \
-            dist/app/Strata-macos-arm64.dmg \
-            dist/app/Strata-macos-arm64.dmg.sha256 \
-            dist/bin/strata-macos-arm64.tar.gz \
-            dist/bin/strata-macos-arm64.tar.gz.sha256 \
-          || gh release upload "${GITHUB_REF_NAME}" \
-            dist/app/Strata-macos-arm64.dmg \
-            dist/app/Strata-macos-arm64.dmg.sha256 \
-            dist/bin/strata-macos-arm64.tar.gz \
-            dist/bin/strata-macos-arm64.tar.gz.sha256 --clobber
+            --notes-file "$notes" \
+          || gh release edit "${GITHUB_REF_NAME}" --notes-file "$notes"
