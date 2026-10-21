@@ -19,7 +19,7 @@ node strata/src/cli.ts serve /path/to/your-monorepo
 
 | 項目 | サポート |
 | --- | --- |
-| Node.js | 22.18 以降(TypeScript を type stripping でそのまま実行するため) |
+| Node.js | 22.18 以上の 22 系、または 24 以上(TypeScript を type stripping でそのまま実行するため) |
 | OS / CPU | macOS・Linux・Windows / Intel・Apple Silicon を問わない |
 
 ---

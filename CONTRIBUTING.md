@@ -44,7 +44,7 @@ relicense the project (including your contribution) under other terms in the fut
 git clone https://github.com/makoto-developer/strata.git
 cd strata
 
-# 依存ゼロ・ビルド不要(Node.js >= 22.18 の型ストリッピングで TS を直接実行)
+# 依存ゼロ・ビルド不要(Node.js ^22.18 || >=24 の型ストリッピングで TS を直接実行)
 node src/cli.ts serve examples/demo
 
 npm test              # スモークテスト(test/*.mjs)
@@ -74,7 +74,7 @@ Strata は「取りこぼしても良いが、嘘は出さない」方針です(
 
 - 本体(`src/`)とビューア(`web/`)は**実行時依存ゼロ**が設計原則です
 - ビューアは外部 JS/CSS ライブラリを使いません(フレームワークも入れません)
-- ビルド専用ツール(esbuild など)は `--no-save` で都度入れる形にしてください
+- 開発専用ツール(Playwright など)は `--no-save` で都度入れる形にしてください
 
 ### 4. 仕様書も一緒に直す
 

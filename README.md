@@ -188,7 +188,8 @@ Go/Python 等のツールチェーンは**不要**(テキスト・構文レベ�
 
 ## 必要環境
 
-- Node.js **22.18 以上**(TypeScript を直接実行するため。外部依存ゼロ・ビルド不要)
+- Node.js **22.18 以上の 22 系、または 24 以上**(TypeScript を直接実行するため。外部依存ゼロ・ビルド不要)
+  <br>23 系は 23.5 以前で type stripping が既定無効のため対象外です(23 系自体が EOL)
 - 解析対象のリポジトリ
 
 ## インストール
@@ -459,16 +460,14 @@ Strata 本体は**実行時依存ゼロ**ですが、開発・配布・ドキュ
 
 | 用途 | プロジェクト | ライセンス |
 | --- | --- | --- |
-| 実行ランタイム(バイナリに同梱) | [Node.js](https://github.com/nodejs/node) | MIT |
-| 単一実行ファイルへの blob 注入 | [postject](https://github.com/nodejs/postject) | MIT |
-| ビルド時のバンドル | [esbuild](https://github.com/evanw/esbuild) | MIT |
+| 実行ランタイム(利用者が用意) | [Node.js](https://github.com/nodejs/node) | MIT |
 | 型チェック(devDependency) | [TypeScript](https://github.com/microsoft/TypeScript) | Apache-2.0 |
 | スクリーンショット・デモ録画(開発時のみ) | [Playwright](https://github.com/microsoft/playwright) | Apache-2.0 |
 | ドキュメントサイトの生成 | [Jekyll](https://github.com/jekyll/jekyll) | MIT |
 | ドキュメントサイトのテーマ | [Just the Docs](https://github.com/just-the-docs/just-the-docs) | MIT |
 | 行動規範の原文 | [Contributor Covenant](https://www.contributor-covenant.org/) v2.1 | CC BY 4.0(出典表記は [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) に記載) |
 
-esbuild / postject / Playwright は `npm install --no-save` で**都度入れて使う**方式にしており、
+Playwright は `npm install --no-save` で**都度入れて使う**方式にしており、
 `package.json` の依存には含めていません(利用者側のインストールには不要です)。
 
 また、レポートの図生成には [Mermaid](https://github.com/mermaid-js/mermaid)(MIT)の記法を出力しています

@@ -13,7 +13,8 @@ nav_order: 3
 
 ### git clone 版(全 OS)
 
-Node.js **22.18 以降**が必要です(TypeScript の型ストリッピングを使うため)。
+Node.js **22.18 以上の 22 系、または 24 以上**が必要です(TypeScript の型ストリッピングを使うため)。
+23 系は 23.5 以前で型ストリッピングが既定無効のため対象外です。
 
 ```sh
 git clone https://github.com/makoto-developer/strata.git
