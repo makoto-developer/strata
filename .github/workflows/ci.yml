@@ -14,8 +14,8 @@ jobs:
         # 22.18 は type stripping がデフォルト有効になった最小バージョン、24 は現行の LTS 系。
         node-version: ['22.18', '24']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
       - name: "devDependencies (typescript / @types/node) をインストール"
@@ -34,8 +34,8 @@ jobs:
   viewer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - run: npm ci
