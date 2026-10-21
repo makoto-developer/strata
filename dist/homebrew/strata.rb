@@ -2,7 +2,7 @@
 #
 # 更新手順(新しいタグを切ったあと):
 #   1. タグ(例 v0.1.5)を push する
-#   2. 下の version / url / sha256 を更新する
+#   2. 下の url / sha256 を更新する(version は URL から読まれるので書かない)
 #        curl -fsSL https://github.com/makoto-developer/strata/archive/refs/tags/vX.Y.Z.tar.gz | shasum -a 256
 #   3. tap 用リポジトリ makoto-developer/homebrew-strata の Formula/strata.rb に反映する
 #   4. 利用者は次で導入:
@@ -15,7 +15,6 @@ class Strata < Formula
   desc "多言語・マイクロサービス対応の依存関係可視化・コールグラフ探索ツール"
   homepage "https://makoto-developer.github.io/strata/"
   url "https://github.com/makoto-developer/strata/archive/refs/tags/v0.1.4.tar.gz"
-  version "0.1.4"
   sha256 "ad0b7ee9d6528f90404c5ce4a77ad5709a05b2bbf84cf0e4f7d5019c4c93b0cf"
   license "AGPL-3.0-only"
 
