@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 // 埋め込む Node.js。リリースの再現性のためにバージョンを固定する
 // (Homebrew 等のディストリビューション版は SEA が無効化されていることがあるため、
 //  公式ビルドを取得して使う)。上げるときは README のサポート表も一緒に更新すること。
-const NODE_VERSION = process.env.STRATA_NODE_VERSION ?? 'v24.18.0';
+const NODE_VERSION = process.env.STRATA_NODE_VERSION ?? 'v24.22.0';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const outDir = path.join(root, 'dist', 'bin');

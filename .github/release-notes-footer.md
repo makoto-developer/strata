@@ -14,7 +14,7 @@ strata --version
 | --- | --- |
 | OS | macOS 13 Ventura 以降 |
 | CPU | Apple Silicon(M1 / M2 / M3 / M4 …)。Intel Mac 用バイナリはありません |
-| 同梱ランタイム | Node.js v24.18.0(別途 Node のインストールは不要) |
+| 同梱ランタイム | Node.js v24.22.0(別途 Node のインストールは不要) |
 
 Intel Mac・Linux・Windows で使う場合は、Node.js 22.18 以降を入れて
 `git clone` 版を使ってください(バイナリと同じ機能が動きます)。

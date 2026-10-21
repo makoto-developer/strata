@@ -44,6 +44,6 @@ body:
     attributes:
       label: 実行環境
       description: OS と Node のバージョン(バイナリ版なら「バイナリ版」と書いてください)
-      placeholder: macOS 15.3 (Apple M2) / Node v24.18.0
+      placeholder: macOS 15.3 (Apple M2) / Node v24.22.0
     validations:
       required: true
