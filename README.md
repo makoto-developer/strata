@@ -61,8 +61,7 @@ strata check ./my-monorepo   # CI で循環依存・レイヤー違反を検査�
 - ⚡ **速い。** 実測で **1,200 ファイル / 6,902 ノードを 0.34 秒**で解析
   (Apple M シリーズ、キャッシュなし、5 回の中央値)。待ち時間がないので気軽に何度でも回せます
   <br>測定対象は同梱の生成器で作れます: `node scripts/gen-workspace.mjs /tmp/bench 150`
-- 🪶 **軽い。** 本体のコードは **約 530KB**(`src` + `web`)。
-  バイナリ版は Node.js 同梱で 37MB(圧縮)
+- 🪶 **軽い。** 本体のコードは **約 530KB**(`src` + `web`)
 - 🔧 **言語のツールチェーンが要らない。** Go や Python を入れていないマシンでも、
   Go や Python のコードを解析できます(テキスト・構文レベルの解析)
 - 🧱 **ビルド不要。** `git clone` して `node src/cli.ts serve .` で動きます
@@ -215,7 +214,7 @@ strata serve /path/to/your-monorepo
 ### mise / asdf(Node を用意して git 導入)
 
 ```bash
-mise use -g node@24             # asdf の場合: asdf install nodejs 24
+mise use -g node@24             # asdf の場合: asdf install nodejs latest:24
                                 # 下限は 22.18。リポジトリ同梱の .mise.toml と揃えると npm link の置き場が一致する
 git clone https://github.com/makoto-developer/strata.git
 cd strata && npm link           # `strata` コマンドが使えるようになる
@@ -494,9 +493,7 @@ esbuild / postject / Playwright は `npm install --no-save` で**都度入れて
 
 配布物に含まれる第三者コードの表記:
 
-- **macOS 向けバイナリ**には Node.js(MIT)を同梱しています。ライセンス全文は
-  アーカイブ内の `THIRD-PARTY-NOTICES.txt` に同梱しています
-- ソース配布物に第三者コードは含まれません(実行時依存ゼロ)。開発・ビルドで使う OSS は
+- 配布物に第三者コードは含まれません(ソース配布・実行時依存ゼロ)。開発・ビルドで使う OSS は
   [使っているもの・謝辞](#使っているもの謝辞)を参照してください
 
 質問・不具合の窓口は [SUPPORT.md](SUPPORT.md) を参照してください。

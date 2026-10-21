@@ -36,13 +36,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 変更履歴は GitHub の自動生成を使い、その下に導入手順・サポート範囲を足す
+          # 変更履歴は GitHub の自動生成を使い、その下に導入手順・サポート範囲を足す。
+          # 生成に失敗したらここで落とす。空のまま edit に進むと既存の本文を消す
           notes="${RUNNER_TEMP}/notes.md"
           gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-            -f tag_name="${GITHUB_REF_NAME}" --jq .body > "$notes" || : > "$notes"
+            -f tag_name="${GITHUB_REF_NAME}" --jq .body > "$notes"
           printf '\n\n' >> "$notes"
           cat .github/release-notes-footer.md >> "$notes"
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
-            --notes-file "$notes" \
-          || gh release edit "${GITHUB_REF_NAME}" --notes-file "$notes"
+          # --verify-tag: タグが消えていると gh は既定ブランチの HEAD からタグを作ってしまう
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" --notes-file "$notes"
+          else
+            gh release create "${GITHUB_REF_NAME}" --verify-tag \
+              --title "${GITHUB_REF_NAME}" \
+              --notes-file "$notes"
+          fi
