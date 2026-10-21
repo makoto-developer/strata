@@ -632,14 +632,14 @@ function main(): void {
   }
 }
 
-// サポート下限は 24。22 系でも type stripping 自体は動くが、型検査を 24 基準で
-// 回しているので、実行時に存在しない API を踏みうる。起動時に弾いて理由を示す。
+// 保証する範囲は engines のとおり ^24.12 || >=26 だが、ここで弾くのは 24 未満だけ。
+// 24.0〜24.11 と 25 系は保証外でも動くので、動くものを拒否しない。
 function checkNodeVersion(): void {
   const m = /^v?(\d+)/.exec(process.versions.node);
   if (!m) return;
   if (Number(m[1]) < 24) {
     console.error(
-      `Strata は Node.js 24 以上が必要です(現在 ${process.versions.node})。\n` +
+      `Strata は Node.js 24.12 以上が必要です(現在 ${process.versions.node})。\n` +
         `TypeScript を直接実行するため、より新しい Node を利用してください。`,
     );
     process.exit(1);

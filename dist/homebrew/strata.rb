@@ -17,6 +17,9 @@ class Strata < Formula
   url "https://github.com/makoto-developer/strata/archive/refs/tags/v0.1.4.tar.gz"
   sha256 "ad0b7ee9d6528f90404c5ce4a77ad5709a05b2bbf84cf0e4f7d5019c4c93b0cf"
   license "AGPL-3.0-only"
+  # 版は据え置きのまま配布形式を SEA バイナリからソースに変えたので、
+  # revision を上げないと既存の導入が brew upgrade で置き換わらない
+  revision 1
 
   depends_on "node"
 

@@ -11,15 +11,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 24.12.0 は engines が宣言する下限そのもの("24" は 24 系の最新に解決されるので、
-        # 下限で壊れる変更を取り逃がす)。24 は LTS の最新(メンテナンス期、2028-04-30 まで)、
-        # 26 は最新。25 系は EOL 済み(2026-06-01)なので対象外。
+        # 24.12.0 は engines が宣言する下限そのもの(浮動指定だけだと下限で壊れる変更を
+        # 取り逃がす)。24 は LTS(メンテナンス期、2028-04-30 まで)、26 は最新。
+        # 25 系は EOL 済み(2026-06-01)なので対象外。
         node-version: ['24.12.0', '24', '26']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
+          # 既定(false)だとランナーのキャッシュが優先され、セキュリティ修正版が出ても
+          # 旧パッチで緑になる。浮動指定(24 / 26)を最新で検査するために要る
+          check-latest: true
       - name: "devDependencies (typescript / @types/node) をインストール"
         run: npm ci
       - name: "型チェック (tsc --noEmit)"
@@ -40,6 +43,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+          check-latest: true
       - run: npm ci
       - name: "Playwright と Chromium を用意 (監査ツールは本体の依存にしない)"
         run: npm install --no-save playwright && npx playwright install --with-deps chromium
