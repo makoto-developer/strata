@@ -215,7 +215,8 @@ strata serve /path/to/your-monorepo
 ### mise / asdf(Node を用意して git 導入)
 
 ```bash
-mise use -g node@22.18          # asdf の場合: asdf install nodejs 22.18.0
+mise use -g node@24             # asdf の場合: asdf install nodejs 24
+                                # 下限は 22.18。リポジトリ同梱の .mise.toml と揃えると npm link の置き場が一致する
 git clone https://github.com/makoto-developer/strata.git
 cd strata && npm link           # `strata` コマンドが使えるようになる
 strata serve /path/to/your-monorepo

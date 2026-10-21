@@ -3,9 +3,10 @@
 # ここで指定するのは開発時に使う版で、下限そのものではない:
 # 22.18 を指すと 22.18.0 に貼り付き、以降の v22 系の修正が当たらなくなるため、
 # 開発は現行 LTS で回し、下限での動作確認は CI の matrix(22.18 / 24)に任せる。
+# ただし matrix が守れるのはテストが通る経路だけで、型検査は @types/node の版に従う。
 #
 # 利用者としてのインストール(GitHub 公開のみ):
 #   mise は Node ランタイムの供給に使い、Strata 本体は Homebrew か git 導入を推奨。
-#   asdf も同様に `.tool-versions` で nodejs 22.18 を指定すればよい(下記 README 参照)。
+#   asdf も同様に `.tool-versions` で nodejs 24 を指定すればよい(下記 README 参照)。
 [tools]
 node = "24"
