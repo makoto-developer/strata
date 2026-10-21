@@ -188,8 +188,8 @@ Go/Python 等のツールチェーンは**不要**(テキスト・構文レベ�
 
 ## 必要環境
 
-- Node.js **22.18 以上の 22 系、または 24 以上**(TypeScript を直接実行するため。外部依存ゼロ・ビルド不要)
-  <br>23 系は 23.5 以前で type stripping が既定無効のため対象外です(23 系自体が EOL)
+- Node.js **24.12 以上**(TypeScript を直接実行するため。外部依存ゼロ・ビルド不要)
+  <br>24.12.0 で type stripping が stable になりました。25 系は EOL 済み(2026-06-01)のため対象外です
 - 解析対象のリポジトリ
 
 ## インストール
@@ -216,7 +216,7 @@ strata serve /path/to/your-monorepo
 
 ```bash
 mise use -g node@24             # asdf: asdf install nodejs latest:24 && asdf set -u nodejs latest:24
-                                # 下限は 22.18。リポジトリ同梱の .mise.toml と揃えると npm link の置き場が一致する
+                                # 下限は 24。リポジトリ同梱の .mise.toml と揃えると npm link の置き場が一致する
 git clone https://github.com/makoto-developer/strata.git
 cd strata && npm link           # `strata` コマンドが使えるようになる
 strata serve /path/to/your-monorepo

@@ -632,16 +632,14 @@ function main(): void {
   }
 }
 
-// Node 22.18 未満は TypeScript の type stripping が未対応で、実行前に不明瞭な
-// パースエラーになる。起動時に確認して親切なメッセージを出す。
+// サポート下限は 24。22 系でも type stripping 自体は動くが、型検査を 24 基準で
+// 回しているので、実行時に存在しない API を踏みうる。起動時に弾いて理由を示す。
 function checkNodeVersion(): void {
-  const m = /^v?(\d+)\.(\d+)/.exec(process.versions.node);
+  const m = /^v?(\d+)/.exec(process.versions.node);
   if (!m) return;
-  const major = Number(m[1]);
-  const minor = Number(m[2]);
-  if (major < 22 || (major === 22 && minor < 18)) {
+  if (Number(m[1]) < 24) {
     console.error(
-      `Strata は Node.js 22.18 以上の 22 系、または 24 以上が必要です(現在 ${process.versions.node})。\n` +
+      `Strata は Node.js 24 以上が必要です(現在 ${process.versions.node})。\n` +
         `TypeScript を直接実行するため、より新しい Node を利用してください。`,
     );
     process.exit(1);

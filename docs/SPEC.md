@@ -77,7 +77,7 @@ nav_order: 7
 
 ### 3.1 形態
 
-- **CLI**(Node.js `^22.18 || >=24`、TypeScript ソースを直接実行、**外部依存ゼロ・ビルド不要**)
+- **CLI**(Node.js `^24.12 || >=26`、TypeScript ソースを直接実行、**外部依存ゼロ・ビルド不要**)
 - **Web ビューア**(CLI 内蔵のローカル HTTP サーバー、または自己完結 HTML 1 ファイルに書き出し)
 - IDE 非依存。リポジトリに置いて誰でも `strata serve .` で閲覧できる
 
@@ -791,7 +791,7 @@ $ strata trace . 'frontend/src/api/client.ts#fetchUser'
 
 | 項目 | 要件 |
 |---|---|
-| 実行環境 | Node.js `^22.18 \|\| >=24`(TypeScript 直接実行)。macOS / Linux / Windows |
+| 実行環境 | Node.js `^24.12 \|\| >=26`(TypeScript 直接実行)。macOS / Linux / Windows |
 | 依存 | 実行時外部依存ゼロ(npm install 不要で `node src/cli.ts` が動く) |
 | 規模 | 数千ファイル・関数数万ノード規模で scan 数秒〜十数秒、ビューア操作が実用的であること。既定の展開深度を浅くし、依存線の描画は表示中ノードのみに集約して描画量を抑える |
 | 決定性 | 同一入力から同一モデル(タイムスタンプ以外)を出力 |

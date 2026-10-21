@@ -42,7 +42,7 @@ Strata はこれを**静的解析だけで**(サービスを起動せず、ト�
 ## 3 分で試す
 
 ```sh
-# Node.js 22.18 以上の 22 系か 24 以上があれば、ビルド不要でそのまま動きます
+# Node.js 24.12 以上があれば、ビルド不要でそのまま動きます
 git clone https://github.com/makoto-developer/strata.git
 cd strata
 node src/cli.ts serve examples/demo

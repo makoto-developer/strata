@@ -44,7 +44,7 @@ relicense the project (including your contribution) under other terms in the fut
 git clone https://github.com/makoto-developer/strata.git
 cd strata
 
-# 依存ゼロ・ビルド不要(Node.js ^22.18 || >=24 の型ストリッピングで TS を直接実行)
+# 依存ゼロ・ビルド不要(Node.js ^24.12 || >=26 の型ストリッピングで TS を直接実行)
 node src/cli.ts serve examples/demo
 
 npm test              # スモークテスト(test/*.mjs)

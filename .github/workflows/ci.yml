@@ -11,8 +11,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 22.18 は type stripping がデフォルト有効になった最小バージョン、24 は現行の LTS 系。
-        node-version: ['22.18', '24']
+        # 24.12.0 は engines が宣言する下限そのもの("24" は 24 系の最新に解決されるので、
+        # 下限で壊れる変更を取り逃がす)。24 は LTS の最新(メンテナンス期、2028-04-30 まで)、
+        # 26 は最新。25 系は EOL 済み(2026-06-01)なので対象外。
+        node-version: ['24.12.0', '24', '26']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
