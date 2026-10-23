@@ -113,12 +113,14 @@ gRPC の RPC・HTTP エンドポイント・GraphQL フィールドを 1 つの�
 
 ### 🧭 図 — 「サービス構成を人に説明したい」
 
-サービス単位の箱と矢印。層ごとの帯、境界の呼び出し数(⚡RPC / ⇄HTTP / ◈GraphQL の内訳)、
+サービス単位の箱と矢印。帯は「**依存の深さ**」(そこから下へ伸びる依存チェーンの長さ。0 が土台側で、
+宣言されたアーキテクチャ層ではありません)、境界の呼び出し数(⚡RPC / ⇄HTTP / ◈GraphQL の内訳)、
 外部システム(破線の箱)まで含めて俯瞰できます。箱をクリックすると依存元・依存先・公開 API が出ます。
+サービス名の絞り込み・1 ホップ・API のみ・ズームで、大きな構成でも読める範囲に絞れます。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/shots/diagram-dark.png">
-  <img alt="図タブ: サービス単位のアーキテクチャ図とレイヤー帯" src="docs/assets/shots/diagram-light.png">
+  <img alt="図タブ: サービス単位のアーキテクチャ図と、依存の深さごとの帯" src="docs/assets/shots/diagram-light.png">
 </picture>
 
 ### 🚪 エントリーポイント — 「どこから読み始めればいい?」
