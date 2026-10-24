@@ -3,11 +3,13 @@
 export type NodeKind =
   | 'service' | 'module' | 'dir' | 'package' | 'file' | 'proto' | 'func' | 'rpc' | 'topic'
   | 'route' // HTTP エンドポイント(REST / webhook)
-  | 'gqlfield'; // GraphQL の Query / Mutation / Subscription フィールド
+  | 'gqlfield' // GraphQL の Query / Mutation / Subscription フィールド
+  | 'artifact'; // proto から生成されたクライアントライブラリ(中継点であって呼び出し先ではない)
 export type EdgeKind =
   | 'import' | 'call' | 'rpc' | 'impl' | 'proto' | 'event'
   | 'http' // HTTP 呼び出し(クライアント → ルート)
-  | 'graphql'; // GraphQL 操作(クライアント → フィールド)、federation の参照
+  | 'graphql' // GraphQL 操作(クライアント → フィールド)、federation の参照
+  | 'generates'; // proto の service → そこから生成された artifact
 
 /**
  * ノードの付随情報。アナライザが書き込み、ビューア/レポート/CLI が読む。
@@ -17,6 +19,18 @@ export type EdgeKind =
 export interface NodeMeta {
   file?: string; // 定義ファイルの ws 相対パス
   line?: number; // 定義行(1 始まり)
+  variants?: string[]; // 同じ id を作る別定義(Go の build tag で排他な実装)
+  spec?: 'openapi'; // API 仕様書ファイル
+  declared?: boolean; // 仕様書で宣言されたエンドポイント(コードから見つけた実装と対にする)
+  operationId?: string; // OpenAPI の operationId
+  // デプロイ定義(Kubernetes)から読んだ配置情報
+  deploy?: {
+    service?: string;
+    namespace?: string;
+    workloads?: string[];
+    image?: string;
+    replicas?: number;
+  };
   doc?: string; // 説明文(godoc / proto コメント等)
   entry?: 'main' | 'view'; // エントリーポイント種別(プロセス起動点 / LiveView 画面)
   events?: string[]; // LiveView の handle_event 名
@@ -46,6 +60,12 @@ export interface NodeMeta {
   gqlType?: string; // 戻り値の型
   entities?: Record<string, string>; // federation のエンティティ型 → @key(fields)
   subgraph?: string; // サブグラフ名(スキーマを持つサービス/モジュール)
+  // 間接層(生成クライアント / Gateway / Federation)
+  artifactVersion?: string; // 生成物のバージョン(git tag 等。分かる場合のみ)
+  resolvedBy?: string; // この artifact を解決した indirection パターン名
+  // 中継「候補」。同じ RPC を実装しつつ自分でも呼ぶ層。実際の通信経路は静的には決まらないので、
+  // 層数・順序・到達先を主張してはいけない(表示のフィルタにだけ使う)
+  relayCandidate?: boolean;
 }
 
 export interface GNode {
@@ -58,6 +78,32 @@ export interface GNode {
   meta?: NodeMeta;
 }
 
+/**
+ * その線を引いた根拠の強さ。
+ *
+ * 全部の線が同じ見た目だと、「生成コードの埋め込みという構造的な証拠で引いた線」と
+ * 「名前が一致しただけの線」を利用者が区別できない。後者は別組織の同名 API に
+ * 化けうるので、CI ゲートに使う前に見分けられる必要がある。
+ *
+ * - exact      … package 込みの完全修飾名が一致した(生成物を特定したうえで)
+ * - configured … 利用者が設定で明示した対応
+ * - structural … 構造的な証拠(解決済み import・生成コードの Unimplemented 埋め込み・
+ *                コンストラクタで掴んだクライアント)
+ * - name       … 名前が一致しただけ。いちばん弱い
+ */
+export type EdgeEvidence = 'exact' | 'configured' | 'structural' | 'name';
+
+/** 強い順。1 本の線に複数の根拠が集まったら、強いほうを残す。 */
+const EVIDENCE_RANK: Record<EdgeEvidence, number> = { exact: 3, configured: 2, structural: 1, name: 0 };
+
+/** 既存の根拠より強ければ差し替える(弱いほうで上書きしない)。 */
+export function setEvidence(edge: GEdge | undefined, level: EdgeEvidence): void {
+  if (!edge) return;
+  if (edge.evidence === undefined || EVIDENCE_RANK[level] > EVIDENCE_RANK[edge.evidence]) {
+    edge.evidence = level;
+  }
+}
+
 export interface GEdge {
   from: string;
   to: string;
@@ -65,6 +111,29 @@ export interface GEdge {
   kind: EdgeKind;
   /** 呼び出し箇所(最大5件)。ビューアの「呼び出し元行へジャンプ」に使う */
   sites?: Array<{ f: string; l: number }>;
+  /** この呼び出しが経由した生成物(artifact)の node id。呼び出し元が実際に import している事実だけを持つ */
+  via?: string[];
+  /** forbidden ルールに一致したときのルール名(ビューアが図で色を変える。正本は strata check) */
+  violates?: string;
+  /** その線を引いた根拠の強さ(rpc / impl のみ。import / call は構文そのものなので付けない) */
+  evidence?: EdgeEvidence;
+}
+
+/** 未解決参照の理由。UI とドキュメントの表示文言はこのキーで引く。 */
+export type UnresolvedReason = 'artifact' | 'env' | 'dynamic';
+
+/**
+ * 「何らかの RPC / トピックを叩いているが、対応する定義をまだ特定できていない」中間状態。
+ * 推測で繋がずここに残し、ユーザーが indirection / infra 設定を書く手がかりにする
+ * (「誤検出より取りこぼしを優先」方針)。
+ */
+export interface UnresolvedRef {
+  reason: UnresolvedReason;
+  from: string; // 呼び出し元ノード id
+  detail: string; // import パス / 環境変数名 / 動的に組み立てられた式
+  file?: string;
+  line?: number;
+  hint?: string; // 解決するために何を設定すればよいか
 }
 
 /**
@@ -84,6 +153,38 @@ export interface Thresholds {
   maxCycles?: number; // 循環グループ数の上限
   maxInstability?: number; // 各サービスの不安定度 I の上限(0..1)
   maxEfferent?: number; // 各サービスの依存先数 Ce の上限
+  // 解析の健全性。ルール違反が「無い」のか「見えていないだけ」なのかを分けるため、
+  // 解析が届かなかった量そのものを CI で見張れるようにする
+  maxUnresolved?: number; // 未解決(import + RPC 呼び出し)の上限
+  maxAmbiguous?: number; // 候補が複数で繋がなかった箇所の上限
+  failOnReadError?: boolean; // 読めなかったファイルが 1 つでもあれば fail
+  // ルール判定に使う線の下限。名前が一致しただけの線で CI を落とすのは乱暴なので、
+  // 'structural' 以上に限る、といった指定ができる(既定は全部の線を見る)
+  ruleMinEvidence?: EdgeEvidence;
+}
+
+/**
+ * 解析台帳。「どこまで見えているか」を数える。
+ *
+ * このツールの売りは「コードから導出するのでずれない」だが、静的解析には必ず
+ * 届かない範囲がある。届かなかったことが黙って消えると、利用者は不完全な絵を
+ * 完全だと思い込む。未解決 0 件は「完全に解析できた」を意味しない。
+ * だから「見えなかった量」を数えて、判断材料として出す。
+ */
+export interface Coverage {
+  files: { read: number; failed: number };
+  /** 内部 import。viaArtifact は Go のパッケージとしては解けないが間接層が説明したもの */
+  imports: { resolved: number; unresolved: number; viaArtifact: number };
+  /**
+   * RPC 呼び出しの証拠。evidence は間接層の入力なので、間接層が無効なら
+   * resolvedByIndirection は 0 になる(直接解決で繋がっている分は別)。
+   * 率を出すと構成で分母が変わって誤解を招くため、率ではなく件数で持つ
+   */
+  rpcCalls: { evidence: number; resolvedByIndirection: number; unresolved: number };
+  /** 候補が複数で「繋がなかった」回数。取りこぼしの明示 */
+  ambiguous: number;
+  /** 無効なアナライザがあれば、その種の依存は最初から出ない */
+  analyzers: { indirection: boolean; infra: boolean; http: boolean; graphql: boolean; messaging: boolean };
 }
 
 export interface Graph {
@@ -97,7 +198,13 @@ export interface Graph {
   rules?: ForbiddenRule[]; // strata.config.json の forbidden(あれば埋め込む)
   thresholds?: Thresholds; // strata.config.json の thresholds(あれば埋め込む)
   ref?: string; // --ref で解析したときの git ref(作業ツリーを見たときは未設定)
+  unresolved?: UnresolvedRef[]; // 解決できなかった参照(indirection / infra が有効なときのみ)
+  coverage?: Coverage; // 解析台帳(どこまで見えているか)
+  schemaVersion?: number; // モデルスキーマ版。未設定は 1 とみなす(古い model.json の後方互換)
 }
+
+/** 現在のモデルスキーマ版。フィールドを追加・改名したら上げる。 */
+export const SCHEMA_VERSION = 4;
 
 /** ツールのバージョン。リリースタグと package.json の version と必ず一致させる
  *  (test/cli.smoke.mjs が 3 者の一致を検査する)。 */
@@ -126,8 +233,12 @@ export function parseGraph(text: string, source: string): Graph {
         `strata scan で生成した model.json を渡してください。`,
     );
   }
-  // 任意フィールドの欠落を埋めて後段の参照を安全にする
+  // 任意フィールドの欠落を埋めて後段の参照を安全にする。
+  // ただし列挙したものだけを返すと、後から足したフィールドが
+  // ディスク経由(キャッシュ / model.json)で黙って消える。実際に coverage が消え、
+  // ビューアからバッジが無くなった。元のオブジェクトを土台にして、必須項目だけ正規化する
   return {
+    ...(g as Graph),
     tool: g.tool,
     name: typeof g.name === 'string' ? g.name : '',
     root: typeof g.root === 'string' ? g.root : '',
@@ -135,6 +246,9 @@ export function parseGraph(text: string, source: string): Graph {
     nodes: g.nodes as GNode[],
     edges: g.edges as GEdge[],
     warnings: Array.isArray(g.warnings) ? (g.warnings as string[]) : [],
+    // schemaVersion 無し = v1(未解決参照を持たない世代)。読めなくはならないので拒否しない
+    schemaVersion: typeof g.schemaVersion === 'number' ? g.schemaVersion : 1,
+    ...(Array.isArray(g.unresolved) ? { unresolved: g.unresolved as UnresolvedRef[] } : {}),
     ...(Array.isArray(g.rules) ? { rules: g.rules as ForbiddenRule[] } : {}),
     ...(g.thresholds && typeof g.thresholds === 'object' ? { thresholds: g.thresholds as Thresholds } : {}),
   };
@@ -185,8 +299,9 @@ export class Builder {
     return parent;
   }
 
-  addEdge(from: string, to: string, kind: EdgeKind, count = 1, site?: { f: string; l: number }): void {
-    if (from === to || !from || !to) return;
+  // 呼び出し側がキー形式(区切りは NUL)を組み立て直さずに済むよう、作った/更新したエッジを返す
+  addEdge(from: string, to: string, kind: EdgeKind, count = 1, site?: { f: string; l: number }): GEdge | undefined {
+    if (from === to || !from || !to) return undefined;
     const key = from + ' ' + to + ' ' + kind;
     let edge = this.edges.get(key);
     if (edge) {
@@ -201,6 +316,7 @@ export class Builder {
         edge.sites.push(site);
       }
     }
+    return edge;
   }
 
   warn(message: string): void {
@@ -216,6 +332,7 @@ export class Builder {
     });
     return {
       tool: TOOL_VERSION,
+      schemaVersion: SCHEMA_VERSION,
       name,
       root,
       createdAt: new Date().toISOString(),

@@ -1,0 +1,438 @@
+{
+  "schemaVersion": 4,
+  "name": "chain",
+  "nodes": [
+    {
+      "id": "artifact:client-lib/a/v1",
+      "label": "v1",
+      "parent": "client-lib/a",
+      "kind": "artifact",
+      "meta": {
+        "file": "client-lib/a/v1/a_grpc.pb.go",
+        "line": 1,
+        "pkg": "chain.a.v1",
+        "services": [
+          "AService"
+        ]
+      }
+    },
+    {
+      "id": "artifact:client-lib/b/v1",
+      "label": "v1",
+      "parent": "client-lib/b",
+      "kind": "artifact",
+      "meta": {
+        "file": "client-lib/b/v1/b_grpc.pb.go",
+        "line": 1,
+        "pkg": "chain.b.v1",
+        "services": [
+          "BService"
+        ]
+      }
+    },
+    {
+      "id": "client-lib",
+      "label": "client-lib",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "client-lib/a",
+      "label": "a",
+      "parent": "client-lib",
+      "kind": "dir"
+    },
+    {
+      "id": "client-lib/b",
+      "label": "b",
+      "parent": "client-lib",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs",
+      "label": "proto-defs",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs/a",
+      "label": "a",
+      "parent": "proto-defs",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs/a/v1",
+      "label": "v1",
+      "parent": "proto-defs/a",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs/a/v1/a.proto",
+      "label": "a.proto",
+      "parent": "proto-defs/a/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 6,
+      "meta": {
+        "pkg": "chain.a.v1",
+        "services": [
+          "AService"
+        ],
+        "messages": {
+          "GetAReq": 4,
+          "GetARes": 5
+        },
+        "file": "proto-defs/a/v1/a.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto-defs/a/v1/a.proto#AService.GetA",
+      "label": "AService.GetA",
+      "parent": "proto-defs/a/v1/a.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto-defs/a/v1/a.proto",
+        "line": 3,
+        "req": "GetAReq",
+        "res": "GetARes"
+      }
+    },
+    {
+      "id": "proto-defs/b",
+      "label": "b",
+      "parent": "proto-defs",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs/b/v1",
+      "label": "v1",
+      "parent": "proto-defs/b",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs/b/v1/b.proto",
+      "label": "b.proto",
+      "parent": "proto-defs/b/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 6,
+      "meta": {
+        "pkg": "chain.b.v1",
+        "services": [
+          "BService"
+        ],
+        "messages": {
+          "GetBReq": 4,
+          "GetBRes": 5
+        },
+        "file": "proto-defs/b/v1/b.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto-defs/b/v1/b.proto#BService.GetB",
+      "label": "BService.GetB",
+      "parent": "proto-defs/b/v1/b.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto-defs/b/v1/b.proto",
+        "line": 3,
+        "req": "GetBReq",
+        "res": "GetBRes"
+      }
+    },
+    {
+      "id": "svc-a",
+      "label": "svc-a",
+      "kind": "module",
+      "lang": "go",
+      "loc": 16,
+      "meta": {
+        "typeDefs": {
+          "AServer": {
+            "f": "svc-a/server.go",
+            "l": 9
+          }
+        }
+      }
+    },
+    {
+      "id": "svc-a#AServer.GetA",
+      "label": "AServer.GetA",
+      "parent": "svc-a",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "svc-a/server.go",
+        "line": 13
+      }
+    },
+    {
+      "id": "svc-b",
+      "label": "svc-b",
+      "kind": "module",
+      "lang": "go",
+      "loc": 31,
+      "meta": {
+        "typeDefs": {
+          "BServer": {
+            "f": "svc-b/server.go",
+            "l": 10
+          },
+          "Usecase": {
+            "f": "svc-b/server.go",
+            "l": 20
+          }
+        }
+      }
+    },
+    {
+      "id": "svc-b#BServer.GetB",
+      "label": "BServer.GetB",
+      "parent": "svc-b",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "svc-b/server.go",
+        "line": 15
+      }
+    },
+    {
+      "id": "svc-b#Usecase.Run",
+      "label": "Usecase.Run",
+      "parent": "svc-b",
+      "kind": "func",
+      "lang": "go",
+      "loc": 7,
+      "meta": {
+        "file": "svc-b/server.go",
+        "line": 24
+      }
+    },
+    {
+      "id": "svc-b/mocks",
+      "label": "mocks",
+      "parent": "svc-b",
+      "kind": "package",
+      "lang": "go",
+      "loc": 19,
+      "meta": {
+        "typeDefs": {
+          "MockAServiceClient": {
+            "f": "svc-b/mocks/mock_a.go",
+            "l": 12
+          }
+        }
+      }
+    },
+    {
+      "id": "svc-b/mocks#MockAServiceClient.GetA",
+      "label": "MockAServiceClient.GetA",
+      "parent": "svc-b/mocks",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "svc-b/mocks/mock_a.go",
+        "line": 16
+      }
+    },
+    {
+      "id": "svc-c",
+      "label": "svc-c",
+      "kind": "module",
+      "lang": "go",
+      "loc": 20,
+      "meta": {
+        "typeDefs": {
+          "Caller": {
+            "f": "svc-c/client.go",
+            "l": 9
+          }
+        }
+      }
+    },
+    {
+      "id": "svc-c#Caller.Fetch",
+      "label": "Caller.Fetch",
+      "parent": "svc-c",
+      "kind": "func",
+      "lang": "go",
+      "loc": 7,
+      "meta": {
+        "file": "svc-c/client.go",
+        "line": 13
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "proto-defs/a/v1/a.proto",
+      "to": "artifact:client-lib/a/v1",
+      "count": 1,
+      "kind": "generates"
+    },
+    {
+      "from": "proto-defs/a/v1/a.proto#AService.GetA",
+      "to": "svc-a#AServer.GetA",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "proto-defs/b/v1/b.proto",
+      "to": "artifact:client-lib/b/v1",
+      "count": 1,
+      "kind": "generates"
+    },
+    {
+      "from": "proto-defs/b/v1/b.proto#BService.GetB",
+      "to": "svc-b#BServer.GetB",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "svc-b",
+      "to": "proto-defs/a/v1/a.proto#AService.GetA",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "svc-b/server.go",
+          "l": 25
+        }
+      ],
+      "evidence": "exact",
+      "via": [
+        "artifact:client-lib/a/v1"
+      ]
+    },
+    {
+      "from": "svc-b#BServer.GetB",
+      "to": "svc-b#Usecase.Run",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "svc-b/server.go",
+          "l": 16
+        }
+      ]
+    },
+    {
+      "from": "svc-b#Usecase.Run",
+      "to": "proto-defs/a/v1/a.proto#AService.GetA",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "svc-b/server.go",
+          "l": 25
+        }
+      ],
+      "evidence": "exact",
+      "via": [
+        "artifact:client-lib/a/v1"
+      ]
+    },
+    {
+      "from": "svc-b/mocks",
+      "to": "proto-defs/a/v1/a.proto#AService.GetA",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "svc-b/mocks/mock_a.go",
+          "l": 17
+        }
+      ],
+      "evidence": "exact",
+      "via": [
+        "artifact:client-lib/a/v1"
+      ]
+    },
+    {
+      "from": "svc-b/mocks#MockAServiceClient.GetA",
+      "to": "proto-defs/a/v1/a.proto#AService.GetA",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "svc-b/mocks/mock_a.go",
+          "l": 17
+        }
+      ],
+      "evidence": "exact",
+      "via": [
+        "artifact:client-lib/a/v1"
+      ]
+    },
+    {
+      "from": "svc-c",
+      "to": "proto-defs/b/v1/b.proto#BService.GetB",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "svc-c/client.go",
+          "l": 14
+        }
+      ],
+      "evidence": "exact",
+      "via": [
+        "artifact:client-lib/b/v1"
+      ]
+    },
+    {
+      "from": "svc-c#Caller.Fetch",
+      "to": "proto-defs/b/v1/b.proto#BService.GetB",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "svc-c/client.go",
+          "l": 14
+        }
+      ],
+      "evidence": "exact",
+      "via": [
+        "artifact:client-lib/b/v1"
+      ]
+    }
+  ],
+  "warnings": [
+    "生成クライアント(生成物)を 2 個検出しました(署名で同定)",
+    "生成クライアントへの import 2 件は Go のパッケージとしては解決できませんでしたが、間接層が呼び出し先の RPC を解決しています(警告ではありません)",
+    "生成クライアント経由の構成で、サーバ実装を 2 件 RPC に接続しました(Unimplemented<Service>Server の埋め込みを証拠に同定)",
+    "間接層を越えた RPC 呼び出しを 3 件接続しました"
+  ],
+  "coverage": {
+    "files": {
+      "read": 24,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 2
+    },
+    "rpcCalls": {
+      "evidence": 3,
+      "resolvedByIndirection": 3,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

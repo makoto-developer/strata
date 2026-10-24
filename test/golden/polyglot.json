@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 4,
+  "name": "polyglot",
+  "nodes": [
+    {
+      "id": "go-impl",
+      "label": "search",
+      "parent": "svc:search",
+      "kind": "module",
+      "lang": "go",
+      "loc": 23,
+      "meta": {
+        "typeDefs": {
+          "server": {
+            "f": "go-impl/server.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "go-impl#server.Query",
+      "label": "server.Query",
+      "parent": "go-impl",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "go-impl/server.go",
+        "line": 15,
+        "doc": "Query は検索を実行する。"
+      }
+    },
+    {
+      "id": "go-impl#server.Suggest",
+      "label": "server.Suggest",
+      "parent": "go-impl",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "go-impl/server.go",
+        "line": 20,
+        "doc": "Suggest は入力補完を返す。"
+      }
+    },
+    {
+      "id": "node-app",
+      "label": "web",
+      "parent": "svc:web",
+      "kind": "module",
+      "lang": "ts"
+    },
+    {
+      "id": "node-app/search.ts",
+      "label": "search.ts",
+      "parent": "node-app",
+      "kind": "file",
+      "lang": "ts",
+      "loc": 13,
+      "meta": {
+        "file": "node-app/search.ts",
+        "line": 1
+      }
+    },
+    {
+      "id": "node-app/search.ts#searchTitles",
+      "label": "searchTitles",
+      "parent": "node-app/search.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 4,
+      "meta": {
+        "file": "node-app/search.ts",
+        "line": 9,
+        "doc": "検索語から候補一覧を返す。"
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/search",
+      "label": "search",
+      "parent": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/search/v1",
+      "label": "v1",
+      "parent": "proto/search",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/search/v1/search.proto",
+      "label": "search.proto",
+      "parent": "proto/search/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 14,
+      "meta": {
+        "pkg": "acme.search.v1",
+        "services": [
+          "SearchService"
+        ],
+        "goPackage": "example.com/acme/proto/search/v1",
+        "messages": {
+          "QueryRequest": 10,
+          "QueryResponse": 11,
+          "SuggestRequest": 12,
+          "SuggestResponse": 13
+        },
+        "file": "proto/search/v1/search.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/search/v1/search.proto#SearchService.Query",
+      "label": "SearchService.Query",
+      "parent": "proto/search/v1/search.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/search/v1/search.proto",
+        "line": 6,
+        "req": "QueryRequest",
+        "res": "QueryResponse"
+      }
+    },
+    {
+      "id": "proto/search/v1/search.proto#SearchService.Suggest",
+      "label": "SearchService.Suggest",
+      "parent": "proto/search/v1/search.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/search/v1/search.proto",
+        "line": 7,
+        "req": "SuggestRequest",
+        "res": "SuggestResponse"
+      }
+    },
+    {
+      "id": "py-worker",
+      "label": "worker",
+      "parent": "svc:worker",
+      "kind": "module",
+      "lang": "py"
+    },
+    {
+      "id": "py-worker/reindex.py",
+      "label": "reindex.py",
+      "parent": "py-worker",
+      "kind": "file",
+      "lang": "py",
+      "loc": 11,
+      "meta": {
+        "file": "py-worker/reindex.py",
+        "line": 1
+      }
+    },
+    {
+      "id": "py-worker/reindex.py#build_index",
+      "label": "build_index",
+      "parent": "py-worker/reindex.py",
+      "kind": "func",
+      "lang": "py",
+      "meta": {
+        "file": "py-worker/reindex.py",
+        "line": 6,
+        "doc": "入力補完の候補を集めて索引を作り直す。"
+      }
+    },
+    {
+      "id": "svc:search",
+      "label": "search",
+      "kind": "service"
+    },
+    {
+      "id": "svc:web",
+      "label": "web",
+      "kind": "service"
+    },
+    {
+      "id": "svc:worker",
+      "label": "worker",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "go-impl",
+      "to": "proto/search/v1/search.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "node-app/search.ts",
+      "to": "node-app/search.ts#searchTitles",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "node-app/search.ts",
+          "l": 9
+        }
+      ]
+    },
+    {
+      "from": "node-app/search.ts",
+      "to": "proto/search/v1/search.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "node-app/search.ts",
+      "to": "proto/search/v1/search.proto#SearchService.Query",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "node-app/search.ts",
+          "l": 10
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "node-app/search.ts#searchTitles",
+      "to": "proto/search/v1/search.proto#SearchService.Query",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "node-app/search.ts",
+          "l": 10
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "proto/search/v1/search.proto#SearchService.Query",
+      "to": "go-impl#server.Query",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "proto/search/v1/search.proto#SearchService.Suggest",
+      "to": "go-impl#server.Suggest",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "py-worker",
+      "to": "proto/search/v1/search.proto#SearchService.Suggest",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "py-worker/reindex.py",
+          "l": 9
+        }
+      ],
+      "evidence": "name"
+    }
+  ],
+  "warnings": [
+    "間接層を越えた RPC 呼び出しを 2 件接続しました"
+  ],
+  "coverage": {
+    "files": {
+      "read": 16,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 1,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 2,
+      "resolvedByIndirection": 2,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

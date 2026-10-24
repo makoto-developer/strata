@@ -1,0 +1,50 @@
+{
+  "name": "event-driven",
+  "services": [
+    {
+      "name": "order",
+      "path": "services/order"
+    },
+    {
+      "name": "mailer",
+      "path": "services/mailer"
+    },
+    {
+      "name": "billing",
+      "path": "services/billing"
+    },
+    {
+      "name": "report",
+      "path": "services/report"
+    },
+    {
+      "name": "audit",
+      "path": "services/audit"
+    }
+  ],
+  "messaging": {
+    "publish": [
+      "Publish"
+    ],
+    "subscribe": [
+      "Subscribe"
+    ]
+  },
+  "infra": {
+    "enabled": true,
+    "sources": [
+      {
+        "type": "kubernetes",
+        "path": "k8s/**/*.yaml"
+      },
+      {
+        "type": "helm",
+        "path": "charts/**/values.yaml"
+      },
+      {
+        "type": "terraform",
+        "path": "infra/**/*.tf"
+      }
+    ]
+  }
+}

@@ -188,4 +188,49 @@ try {
   fs.rmSync(outside, { recursive: true, force: true });
 }
 
+// リポジトリへのシンボリックリンクを並べただけのワークスペース(複合プロジェクトとして
+// 登録せずに直接 serve する使い方)。scan は解析できるので、/source も読めなければならない
+{
+  const repos = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-repos-'));
+  const linkWs = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-linkws-'));
+  const secretDir = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-secret-'));
+  fs.mkdirSync(path.join(repos, 'repo-a'));
+  fs.writeFileSync(path.join(repos, 'repo-a', 'main.go'), 'package main\n');
+  fs.writeFileSync(path.join(secretDir, 'secret.go'), 'package secret\n');
+  fs.symlinkSync(path.join(repos, 'repo-a'), path.join(linkWs, 'repo-a'));
+  // ディレクトリではなくファイルへのリンクは従来どおり拒否されること
+  fs.symlinkSync(path.join(secretDir, 'secret.go'), path.join(linkWs, 'evil.go'));
+  // 祖先ディレクトリへのリンクは「リポジトリを 1 つ足す」ではなく広大な読み取り権限になる
+  fs.symlinkSync(path.dirname(linkWs), path.join(linkWs, 'up'));
+
+  const port3 = port + 2;
+  const server3 = serve(linkWs, port3);
+  await new Promise((r) => setTimeout(r, 300));
+  try {
+    const r = await fetch(`http://127.0.0.1:${port3}/source?f=repo-a/main.go`);
+    if (r.status === 200) ok('server: 直下がシンボリックリンクのワークスペースでも /source が読める');
+    else fail('シンボリックリンク配下の /source が ' + r.status);
+
+    const listed = await (await fetch(`http://127.0.0.1:${port3}/files`)).json();
+    if (listed.files.includes('repo-a/main.go') && !listed.files.some((f) => f.includes('secret')))
+      ok('server: /files はリンク先リポジトリを列挙し、プロジェクト外のファイルリンクは出さない');
+    else fail('/files が想定外: ' + JSON.stringify(listed.files));
+
+    const evil = await fetch(`http://127.0.0.1:${port3}/source?f=evil.go`);
+    if (evil.status === 403) ok('server: ディレクトリでないリンクは引き続き 403');
+    else fail('ファイルリンクが ' + evil.status);
+
+    // 悪意あるリポジトリを clone してそのまま serve した場合を想定
+    const upRel = path.join('up', path.basename(secretDir), 'secret.go');
+    const up = await fetch(`http://127.0.0.1:${port3}/source?f=${encodeURIComponent(upRel)}`);
+    if (up.status === 403) ok('server: 祖先ディレクトリへのリンクは許可しない');
+    else fail('祖先リンク越しの読み取りが ' + up.status);
+  } finally {
+    server3.close();
+    fs.rmSync(repos, { recursive: true, force: true });
+    fs.rmSync(linkWs, { recursive: true, force: true });
+    fs.rmSync(secretDir, { recursive: true, force: true });
+  }
+}
+
 console.log(process.exitCode ? '\nサーバテスト失敗あり' : '\nサーバテスト全件成功');

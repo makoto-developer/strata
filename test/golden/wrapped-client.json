@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 4,
+  "name": "wrapped-client",
+  "nodes": [
+    {
+      "id": "app",
+      "label": "wrapped",
+      "parent": "svc:app",
+      "kind": "module",
+      "lang": "go",
+      "loc": 18,
+      "meta": {
+        "typeDefs": {
+          "Notifier": {
+            "f": "app/app.go",
+            "l": 6
+          },
+          "Service": {
+            "f": "app/app.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "app#Service.Announce",
+      "label": "Service.Announce",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "app/app.go",
+        "line": 15,
+        "doc": "Announce は利用者へ通知する。"
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/notify.proto",
+      "label": "notify.proto",
+      "parent": "proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "acme.notify.v1",
+        "services": [
+          "NotifyService"
+        ],
+        "goPackage": "example.com/acme/proto/notify",
+        "messages": {
+          "PushRequest": 9,
+          "PushResponse": 10
+        },
+        "file": "proto/notify.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/notify.proto#NotifyService.Push",
+      "label": "NotifyService.Push",
+      "parent": "proto/notify.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/notify.proto",
+        "line": 6,
+        "req": "PushRequest",
+        "res": "PushResponse"
+      }
+    },
+    {
+      "id": "svc:app",
+      "label": "app",
+      "kind": "service"
+    }
+  ],
+  "edges": [],
+  "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 6,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

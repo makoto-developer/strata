@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 4,
+  "name": "event-driven",
+  "nodes": [
+    {
+      "id": "services/audit",
+      "label": "audit",
+      "parent": "svc:audit",
+      "kind": "module",
+      "lang": "go",
+      "loc": 10,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/audit#Emit",
+      "label": "Emit",
+      "parent": "services/audit",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/audit/audit.go",
+        "line": 7,
+        "doc": "Emit は監査イベントを流す。"
+      }
+    },
+    {
+      "id": "services/billing",
+      "label": "billing",
+      "parent": "svc:billing",
+      "kind": "module",
+      "lang": "go",
+      "loc": 10,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/billing#Emit",
+      "label": "Emit",
+      "parent": "services/billing",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/billing/billing.go",
+        "line": 7,
+        "doc": "Emit は課金完了イベントを流す。"
+      }
+    },
+    {
+      "id": "services/mailer",
+      "label": "mailer",
+      "parent": "svc:mailer",
+      "kind": "module",
+      "lang": "go",
+      "loc": 12,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/mailer#Start",
+      "label": "Start",
+      "parent": "services/mailer",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/mailer/mailer.go",
+        "line": 7,
+        "doc": "Start は購読を開始する。"
+      }
+    },
+    {
+      "id": "services/mailer#handle",
+      "label": "handle",
+      "parent": "services/mailer",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "services/mailer/mailer.go",
+        "line": 11
+      }
+    },
+    {
+      "id": "services/order",
+      "label": "order",
+      "parent": "svc:order",
+      "kind": "module",
+      "lang": "go",
+      "loc": 11,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/order#Emit",
+      "label": "Emit",
+      "parent": "services/order",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "services/order/order.go",
+        "line": 7,
+        "doc": "Emit は注文確定イベントを流す。"
+      }
+    },
+    {
+      "id": "services/report",
+      "label": "report",
+      "parent": "svc:report",
+      "kind": "module",
+      "lang": "go",
+      "loc": 10,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/report#Emit",
+      "label": "Emit",
+      "parent": "services/report",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/report/report.go",
+        "line": 7,
+        "doc": "Emit は集計結果を流す。"
+      }
+    },
+    {
+      "id": "svc:audit",
+      "label": "audit",
+      "kind": "service",
+      "meta": {
+        "envVars": [
+          "KAFKA_TOPIC"
+        ]
+      }
+    },
+    {
+      "id": "svc:billing",
+      "label": "billing",
+      "kind": "service",
+      "meta": {
+        "envVars": [
+          "KAFKA_TOPIC"
+        ]
+      }
+    },
+    {
+      "id": "svc:mailer",
+      "label": "mailer",
+      "kind": "service",
+      "meta": {
+        "envVars": [
+          "KAFKA_TOPIC"
+        ]
+      }
+    },
+    {
+      "id": "svc:order",
+      "label": "order",
+      "kind": "service",
+      "meta": {
+        "envVars": [
+          "KAFKA_TOPIC"
+        ],
+        "deploy": {
+          "workloads": [
+            "Deployment/order"
+          ],
+          "image": "example/order:latest"
+        }
+      }
+    },
+    {
+      "id": "svc:report",
+      "label": "report",
+      "kind": "service"
+    },
+    {
+      "id": "topic:orders.placed",
+      "label": "orders.placed",
+      "kind": "topic",
+      "meta": {
+        "line": 1
+      }
+    },
+    {
+      "id": "topic:payments.captured",
+      "label": "payments.captured",
+      "kind": "topic",
+      "meta": {
+        "line": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "svc:billing",
+      "to": "topic:payments.captured",
+      "count": 1,
+      "kind": "event"
+    },
+    {
+      "from": "svc:order",
+      "to": "topic:orders.placed",
+      "count": 1,
+      "kind": "event"
+    },
+    {
+      "from": "topic:orders.placed",
+      "to": "svc:mailer",
+      "count": 1,
+      "kind": "event"
+    }
+  ],
+  "warnings": [
+    "環境変数経由のトピック名を IaC から 3 件解決しました"
+  ],
+  "coverage": {
+    "files": {
+      "read": 30,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": true,
+      "http": true,
+      "graphql": true,
+      "messaging": true
+    }
+  },
+  "unresolved": [
+    {
+      "reason": "env",
+      "from": "svc:audit",
+      "detail": "KAFKA_TOPIC",
+      "file": "services/audit/audit.go",
+      "line": 8,
+      "hint": "KAFKA_TOPIC の値が IaC から見つかりません(サービスごとに値が違う場合はスコープも確認してください)"
+    },
+    {
+      "reason": "dynamic",
+      "from": "svc:report",
+      "detail": "fmt.Sprintf(\"%s.%s\", svc, ev)",
+      "file": "services/report/report.go",
+      "line": 8,
+      "hint": "トピック名が実行時に組み立てられているため、静的には決まりません"
+    }
+  ]
+}

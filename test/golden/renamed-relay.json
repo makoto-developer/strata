@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 4,
+  "name": "renamed-relay",
+  "nodes": [
+    {
+      "id": "gateway",
+      "label": "rgateway",
+      "parent": "svc:gateway",
+      "kind": "module",
+      "lang": "go",
+      "loc": 23,
+      "meta": {
+        "typeDefs": {
+          "Gateway": {
+            "f": "gateway/gateway.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "gateway#Gateway.ResolveAccount",
+      "label": "Gateway.ResolveAccount",
+      "parent": "gateway",
+      "kind": "func",
+      "lang": "go",
+      "loc": 7,
+      "meta": {
+        "file": "gateway/gateway.go",
+        "line": 16,
+        "doc": "ResolveAccount は公開 API の名前で内部の GetUser を呼ぶ。"
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/api.proto",
+      "label": "api.proto",
+      "parent": "proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 18,
+      "meta": {
+        "pkg": "acme.api.v1",
+        "services": [
+          "PublicService",
+          "UserService"
+        ],
+        "goPackage": "example.com/acme/proto/api",
+        "messages": {
+          "ResolveAccountRequest": 14,
+          "ResolveAccountResponse": 15,
+          "GetUserRequest": 16,
+          "GetUserResponse": 17
+        },
+        "file": "proto/api.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/api.proto#PublicService.ResolveAccount",
+      "label": "PublicService.ResolveAccount",
+      "parent": "proto/api.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/api.proto",
+        "line": 7,
+        "req": "ResolveAccountRequest",
+        "res": "ResolveAccountResponse"
+      }
+    },
+    {
+      "id": "proto/api.proto#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "proto/api.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/api.proto",
+        "line": 11,
+        "req": "GetUserRequest",
+        "res": "GetUserResponse"
+      }
+    },
+    {
+      "id": "svc:gateway",
+      "label": "gateway",
+      "kind": "service"
+    },
+    {
+      "id": "svc:user",
+      "label": "user",
+      "kind": "service"
+    },
+    {
+      "id": "user",
+      "label": "ruser",
+      "parent": "svc:user",
+      "kind": "module",
+      "lang": "go",
+      "loc": 18,
+      "meta": {
+        "typeDefs": {
+          "server": {
+            "f": "user/server.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "user#server.GetUser",
+      "label": "server.GetUser",
+      "parent": "user",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "user/server.go",
+        "line": 15,
+        "doc": "GetUser は利用者を返す。"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "gateway",
+      "to": "proto/api.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "gateway",
+      "to": "proto/api.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "gateway/gateway.go",
+          "l": 17
+        }
+      ],
+      "evidence": "structural"
+    },
+    {
+      "from": "gateway#Gateway.ResolveAccount",
+      "to": "proto/api.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "gateway/gateway.go",
+          "l": 17
+        }
+      ],
+      "evidence": "structural"
+    },
+    {
+      "from": "proto/api.proto#PublicService.ResolveAccount",
+      "to": "gateway#Gateway.ResolveAccount",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "proto/api.proto#UserService.GetUser",
+      "to": "user#server.GetUser",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "user",
+      "to": "proto/api.proto",
+      "count": 1,
+      "kind": "proto"
+    }
+  ],
+  "warnings": [
+    "間接層を越えた RPC 呼び出しを 1 件接続しました"
+  ],
+  "coverage": {
+    "files": {
+      "read": 11,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 2,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 1,
+      "resolvedByIndirection": 1,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

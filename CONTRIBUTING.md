@@ -44,7 +44,7 @@ relicense the project (including your contribution) under other terms in the fut
 git clone https://github.com/makoto-developer/strata.git
 cd strata
 
-# 依存ゼロ・ビルド不要(Node.js >= 22.18 の型ストリッピングで TS を直接実行)
+# 依存ゼロ・ビルド不要(Node.js ^24.12 || >=26 の型ストリッピングで TS を直接実行)
 node src/cli.ts serve examples/demo
 
 npm test              # スモークテスト(test/*.mjs)
@@ -52,7 +52,7 @@ npm run typecheck     # tsc --noEmit(エラー 0 件を維持)
 ```
 
 `npm install` は**開発でも基本的に不要**です(devDependencies は typecheck 用の
-typescript / @types/node のみ)。スクリーンショット確認やバイナリビルドのときだけ、
+typescript / @types/node のみ)。スクリーンショット確認のときだけ、
 `npm install --no-save playwright` のように都度入れます。
 
 ## この 4 つを守ってもらえると助かります
@@ -74,7 +74,7 @@ Strata は「取りこぼしても良いが、嘘は出さない」方針です(
 
 - 本体(`src/`)とビューア(`web/`)は**実行時依存ゼロ**が設計原則です
 - ビューアは外部 JS/CSS ライブラリを使いません(フレームワークも入れません)
-- ビルド専用ツール(esbuild など)は `--no-save` で都度入れる形にしてください
+- 開発専用ツール(Playwright など)は `--no-save` で都度入れる形にしてください
 
 ### 4. 仕様書も一緒に直す
 
@@ -169,7 +169,7 @@ npm run check     # 型チェック → リント → テスト → ドキュメ
 ### 破壊的変更とリリース
 
 - 0.x のうちは後方互換を保証しません。挙動が変わる変更は PR の説明に **「破壊的変更」** と明記してください
-- リリースはタグ(`vX.Y.Z`)を push すると自動で作られます。バイナリの添付・リリースノートの生成も自動です
+- リリースはタグ(`vX.Y.Z`)を push すると自動で作られます。リリースノートの生成も自動です(アセットの添付はありません)
 - 解析結果(モデル JSON)のスキーマを変える場合は、`docs/SPEC.md` §7 の更新を必ず含めてください
 
 ## リポジトリの構成
@@ -183,4 +183,4 @@ npm run check     # 型チェック → リント → テスト → ドキュメ
 | `web/` | ビューア(素の HTML / CSS / JS) |
 | `docs/` | 仕様書とドキュメントサイト(GitHub Pages) |
 | `test/` | スモークテスト |
-| `scripts/` | 開発補助(デモ録画・スクリーンショット・バイナリビルド) |
+| `scripts/` | 開発補助(デモ録画・スクリーンショット・ドキュメント検査) |

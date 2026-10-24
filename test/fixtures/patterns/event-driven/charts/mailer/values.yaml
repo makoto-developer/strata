@@ -1,0 +1,4 @@
+replicaCount: 2
+env:
+  KAFKA_TOPIC: orders.placed
+  SMTP_HOST: smtp.internal

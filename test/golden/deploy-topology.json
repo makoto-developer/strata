@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 4,
+  "name": "deploy-topology",
+  "nodes": [
+    {
+      "id": "gateway",
+      "label": "gateway",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "gateway/internal",
+      "label": "internal",
+      "parent": "gateway",
+      "kind": "dir"
+    },
+    {
+      "id": "gateway/internal/client",
+      "label": "client",
+      "parent": "gateway/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 9,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "gateway/internal/client#CheckOrders",
+      "label": "CheckOrders",
+      "parent": "gateway/internal/client",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "gateway/internal/client/client.go",
+        "line": 6,
+        "doc": "宛先はホスト名でしか区別できない。パスは 2 サービスで同じ"
+      }
+    },
+    {
+      "id": "order-api",
+      "label": "order-api",
+      "kind": "module",
+      "lang": "go",
+      "meta": {
+        "deploy": {
+          "service": "order-api",
+          "namespace": "prod"
+        }
+      }
+    },
+    {
+      "id": "order-api/internal",
+      "label": "internal",
+      "parent": "order-api",
+      "kind": "dir"
+    },
+    {
+      "id": "order-api/internal/api",
+      "label": "api",
+      "parent": "order-api/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 12,
+      "meta": {
+        "typeDefs": {
+          "Handler": {
+            "f": "order-api/internal/api/handler.go",
+            "l": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "order-api/internal/api#Handler.Health",
+      "label": "Handler.Health",
+      "parent": "order-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "order-api/internal/api/handler.go",
+        "line": 11
+      }
+    },
+    {
+      "id": "order-api/internal/api#Handler.Register",
+      "label": "Handler.Register",
+      "parent": "order-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "order-api/internal/api/handler.go",
+        "line": 7
+      }
+    },
+    {
+      "id": "route:order-api/internal/api#GET /health",
+      "label": "GET /health",
+      "parent": "order-api/internal/api",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "order-api/internal/api/handler.go",
+        "line": 8,
+        "method": "GET",
+        "path": "/health",
+        "framework": "net/http"
+      }
+    },
+    {
+      "id": "route:user-api/internal/api#GET /health",
+      "label": "GET /health",
+      "parent": "user-api/internal/api",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "user-api/internal/api/handler.go",
+        "line": 8,
+        "method": "GET",
+        "path": "/health",
+        "framework": "net/http"
+      }
+    },
+    {
+      "id": "user-api",
+      "label": "user-api",
+      "kind": "module",
+      "lang": "go",
+      "meta": {
+        "deploy": {
+          "service": "user-api",
+          "namespace": "prod",
+          "workloads": [
+            "Deployment/user-api"
+          ],
+          "image": "registry.example.com/user-api:1.4.0",
+          "replicas": 3
+        }
+      }
+    },
+    {
+      "id": "user-api/internal",
+      "label": "internal",
+      "parent": "user-api",
+      "kind": "dir"
+    },
+    {
+      "id": "user-api/internal/api",
+      "label": "api",
+      "parent": "user-api/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 12,
+      "meta": {
+        "typeDefs": {
+          "Handler": {
+            "f": "user-api/internal/api/handler.go",
+            "l": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "user-api/internal/api#Handler.Health",
+      "label": "Handler.Health",
+      "parent": "user-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "user-api/internal/api/handler.go",
+        "line": 11
+      }
+    },
+    {
+      "id": "user-api/internal/api#Handler.Register",
+      "label": "Handler.Register",
+      "parent": "user-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "user-api/internal/api/handler.go",
+        "line": 7
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "gateway/internal/client#CheckOrders",
+      "to": "route:order-api/internal/api#GET /health",
+      "count": 2,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "gateway/internal/client/client.go",
+          "l": 7
+        }
+      ]
+    },
+    {
+      "from": "route:order-api/internal/api#GET /health",
+      "to": "order-api/internal/api#Handler.Health",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "route:user-api/internal/api#GET /health",
+      "to": "user-api/internal/api#Handler.Health",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    }
+  ],
+  "warnings": [
+    "デプロイ定義にあるがワークスペースに対応するコードが無い: 1 件 — redis(ミドルウェアや別リポジトリのサービスなら想定どおりです)"
+  ],
+  "coverage": {
+    "files": {
+      "read": 15,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

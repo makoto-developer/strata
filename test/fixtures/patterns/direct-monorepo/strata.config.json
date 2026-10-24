@@ -1,0 +1,1 @@
+{ "name": "direct-monorepo", "services": [{ "name": "inventory", "path": "service" }] }

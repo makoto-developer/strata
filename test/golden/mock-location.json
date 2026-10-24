@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 4,
+  "name": "mock-location",
+  "nodes": [
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user",
+      "label": "user",
+      "parent": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v1",
+      "label": "v1",
+      "parent": "proto/user",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v1/user.proto",
+      "label": "user.proto",
+      "parent": "proto/user/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 12,
+      "meta": {
+        "pkg": "acme.user.v1",
+        "services": [
+          "UserService"
+        ],
+        "goPackage": "example.com/platform/proto/user/v1",
+        "messages": {
+          "GetUserReq": 10,
+          "GetUserRes": 11
+        },
+        "file": "proto/user/v1/user.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/user/v1/user.proto#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "proto/user/v1/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v1/user.proto",
+        "line": 7,
+        "req": "GetUserReq",
+        "res": "GetUserRes"
+      }
+    },
+    {
+      "id": "svc",
+      "label": "svc",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "svc/internal",
+      "label": "internal",
+      "parent": "svc",
+      "kind": "dir"
+    },
+    {
+      "id": "svc/internal/api",
+      "label": "api",
+      "parent": "svc/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 17,
+      "meta": {
+        "typeDefs": {
+          "Server": {
+            "f": "svc/internal/api/server.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "svc/internal/api#Server.GetUser",
+      "label": "Server.GetUser",
+      "parent": "svc/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "svc/internal/api/server.go",
+        "line": 14
+      }
+    },
+    {
+      "id": "svc/internal/testsupport",
+      "label": "testsupport",
+      "parent": "svc/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 17,
+      "meta": {
+        "typeDefs": {
+          "FakeUserService": {
+            "f": "svc/internal/testsupport/fake_user.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "svc/internal/testsupport#FakeUserService.GetUser",
+      "label": "FakeUserService.GetUser",
+      "parent": "svc/internal/testsupport",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "svc/internal/testsupport/fake_user.go",
+        "line": 14
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "proto/user/v1/user.proto#UserService.GetUser",
+      "to": "svc/internal/api#Server.GetUser",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "proto/user/v1/user.proto#UserService.GetUser",
+      "to": "svc/internal/testsupport#FakeUserService.GetUser",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "svc/internal/api",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "svc/internal/testsupport",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "proto"
+    }
+  ],
+  "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 11,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 2,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

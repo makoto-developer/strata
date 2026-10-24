@@ -31,8 +31,8 @@ Strata はこれを**静的解析だけで**(サービスを起動せず、ト�
 
 - 🔒 **完全ローカル・送信ゼロ**(テレメトリも更新チェックもなし。外部通信コードが存在しない)
 - 📦 **実行時依存ゼロ**(`node_modules` を作らない)
-- ⚡ **速い**(実測: 1,050 ファイル / 1,644 ノードのモノレポを **0.26 秒**)
-- 🪶 **軽い**(本体コード 約 530KB。バイナリは Node 同梱で 37MB)
+- ⚡ **速い**(実測: 1,200 ファイル / 6,902 ノードを **0.34 秒**。測定対象は `scripts/gen-workspace.mjs` で再現できます)
+- 🪶 **軽い**(本体コード 約 530KB)
 - 🔧 **言語のツールチェーン不要**(Go 未インストールでも Go を解析できる)
 - 🌐 **オフラインで完結**、📤 **`export` で 1 枚の自己完結 HTML**
 
@@ -42,14 +42,13 @@ Strata はこれを**静的解析だけで**(サービスを起動せず、ト�
 ## 3 分で試す
 
 ```sh
-# Node.js 22.18 以降があれば、ビルド不要でそのまま動きます
+# Node.js 24.12 以上があれば、ビルド不要でそのまま動きます
 git clone https://github.com/makoto-developer/strata.git
 cd strata
 node src/cli.ts serve examples/demo
 ```
 
-macOS(Apple Silicon)なら[ダブルクリックで使えるアプリ]({{ site.baseurl }}/getting-started/#macos-apple-silicon-アプリ)と
-[単一実行ファイル]({{ site.baseurl }}/getting-started/#macos-apple-silicon-バイナリ)もあります。
+Homebrew から入れることもできます。詳しくは[はじめかた]({{ site.baseurl }}/getting-started/)を参照してください。
 
 ## ドキュメントの歩き方
 

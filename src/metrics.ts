@@ -38,13 +38,20 @@ export function computeServiceMetrics(model: Graph): ServiceMetric[] {
   };
 
   // RPC の実装先(impl エッジ: rpc → 実装関数)。RPC 依存を実装サービスへ帰属させる。
-  const implFuncOf = new Map<string, string>();
+  // 1 つの RPC に実装が複数あることはある(共有 contract の別実装・移行中の並走)。
+  // 1 つだけ採ると、選ばれなかった実装サービスが「誰にも依存されていない」ことになる
+  const implFuncsOf = new Map<string, string[]>();
   for (const e of model.edges) {
-    if (e.kind === 'impl') implFuncOf.set(e.from, e.to);
+    if (e.kind !== 'impl') continue;
+    const list = implFuncsOf.get(e.from);
+    if (list) list.push(e.to);
+    else implFuncsOf.set(e.from, [e.to]);
   }
-  const targetTop = (id: string): string => {
-    const impl = implFuncOf.get(id);
-    return topOf(impl ?? id);
+  /** 依存の帰属先。実装が複数なら全部に帰属させる(取りこぼすより多めに出す)。 */
+  const targetTops = (id: string): string[] => {
+    const impls = implFuncsOf.get(id);
+    if (impls === undefined) return [topOf(id)];
+    return [...new Set(impls.map(topOf))];
   };
 
   // トップレベルの集合(ルート)
@@ -59,10 +66,11 @@ export function computeServiceMetrics(model: Graph): ServiceMetric[] {
   for (const e of model.edges) {
     if (e.kind === 'impl') continue;
     const tu = topOf(e.from);
-    const tv = targetTop(e.to);
-    if (tu === tv || !dependsOn.has(tu) || !dependsOn.has(tv)) continue;
-    dependsOn.get(tu)!.add(tv);
-    dependedBy.get(tv)!.add(tu);
+    for (const tv of targetTops(e.to)) {
+      if (tu === tv || !dependsOn.has(tu) || !dependsOn.has(tv)) continue;
+      dependsOn.get(tu)!.add(tv);
+      dependedBy.get(tv)!.add(tu);
+    }
   }
 
   // loc / rpc をサブツリー集計

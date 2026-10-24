@@ -5,6 +5,7 @@
 // 型推論はしない。ローカル関数呼び出しは「同一ファイル内で定義された名前」のみ接続する。
 
 import { chainBase, readFileText, type Ctx, type Project } from '../context.ts';
+import { setEvidence } from '../model.ts';
 
 interface ExDef {
   name: string;
@@ -82,7 +83,7 @@ function exLeadingDoc(lines: string[], defIndex: number): string | undefined {
  * `#`、文字リテラル `?#` は誤ってコメント開始と見なさない(補間内の呼び出しは残す)。
  * 行をまたぐ補間や sigil までは追わない(検出目的では許容)。
  */
-function stripLineComment(line: string): string {
+export function stripLineComment(line: string): string {
   let inStr = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
@@ -266,8 +267,10 @@ export function linkEx(ctx: Ctx, state: ExState): void {
         const rpcName = snakeToPascal(fn);
         const candidates = lookupRpc(ctx, rpcName).filter((r) => r.service === service);
         if (candidates.length === 1) {
-          ctx.builder.addEdge(fromId, candidates[0].rpcId, 'rpc', 1, { f: file.id, l: i + 1 });
+          // 名前の一致だけ
+          setEvidence(ctx.builder.addEdge(fromId, candidates[0].rpcId, 'rpc', 1, { f: file.id, l: i + 1 }), 'name');
         } else if (candidates.length > 1) {
+          ctx.stats.ambiguous++;
           ctx.builder.warn(
             `Elixir: RPC '${service}.${rpcName}' が複数の proto に一致するため接続をスキップ: ${file.id}`,
           );

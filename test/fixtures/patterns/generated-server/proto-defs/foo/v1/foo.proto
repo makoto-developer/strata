@@ -1,0 +1,17 @@
+syntax = "proto3";
+package acme.foo.v1;
+
+service FooService {
+  rpc GetFoo(GetFooReq) returns (GetFooRes);
+}
+
+message GetFooReq { string id = 1; }
+message GetFooRes { string title = 1; }
+
+// 同じ生成物に含まれる 2 つ目の service(1 つの型が両方を実装する構成の検証用)
+service BarService {
+  rpc Ping(PingReq) returns (PingRes);
+}
+
+message PingReq { string id = 1; }
+message PingRes { string ok = 1; }

@@ -1,4 +1,6 @@
 // Strata ビューア(docs/SPEC.md §8)。外部ライブラリなしの素の JS。
+import { initDiagram } from './diagram.js';
+
 (async function () {
   'use strict';
 
@@ -6,6 +8,14 @@
   const PROJ =
     typeof location !== 'undefined' ? new URLSearchParams(location.search).get('p') : null;
   const projQS = (sep) => (PROJ ? `${sep}p=${encodeURIComponent(PROJ)}` : '');
+  // 起動オーバーレイ。model.json はリクエストのたびに解析するので数秒かかることがある。
+  // 待ちが終わったら必ず外す — 外し損ねると不透明な板が画面全体を覆って何も操作できない
+  const dropBoot = () => {
+    if (typeof document.getElementById !== 'function') return;
+    const boot = document.getElementById('boot');
+    if (boot && boot.remove) boot.remove();
+  };
+
   let model;
   if (window.STRATA_MODEL) {
     model = window.STRATA_MODEL;
@@ -15,6 +25,7 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       model = await r.json();
     } catch (err) {
+      dropBoot(); // 外さないと、この下で出す再試行の案内がオーバーレイに隠れる
       // 取得失敗を握りつぶすと画面が真っ白・無言になるため、原因と再試行導線を出す。
       const host = document.getElementById('layout') || document.body;
       host.textContent = '';
@@ -37,6 +48,9 @@
       return;
     }
   }
+  // モデルは手元にある。この先は同期処理なので、ここで外しておけば
+  // 初期化中に例外が出ても画面が板で覆われたままにならない
+  dropBoot();
 
   // ---------- 索引 ----------
   const byId = new Map(model.nodes.map((n) => [n.id, n]));
@@ -232,29 +246,51 @@
   for (const e of model.edges) {
     if (!CALL_KINDS.has(e.kind)) continue;
     if (!callAdjDown.has(e.from)) callAdjDown.set(e.from, []);
-    callAdjDown.get(e.from).push({ to: e.to, kind: e.kind, sites: e.sites });
+    callAdjDown.get(e.from).push({ to: e.to, kind: e.kind, sites: e.sites, evidence: e.evidence });
     if (!callAdjUp.has(e.to)) callAdjUp.set(e.to, []);
-    callAdjUp.get(e.to).push({ to: e.from, kind: e.kind, sites: e.sites });
+    callAdjUp.get(e.to).push({ to: e.from, kind: e.kind, sites: e.sites, evidence: e.evidence });
   }
-  function traceTree(focusId, dir, maxDepth) {
+  // 木は分岐数の深さ乗で膨らむ。実測で分岐 3・深さ 12 が 240 万ノードになり、
+  // そのまま DOM にすると固まる。総ノード数で頭を打たせて、打ち切りは … で示す
+  const TRACE_MAX_NODES = 600;
+
+  function traceTree(focusId, dir, maxDepth, opts = {}) {
     const adj = dir === 'up' ? callAdjUp : callAdjDown;
-    const build = (id, path, depth, kind, sites) => {
-      if (path.has(id)) return { id, kind, sites, cycle: true, children: [] };
-      if (depth > maxDepth) return { id, kind, sites, cycle: false, children: [], truncated: true };
+    let made = 0;
+    const build = (id, path, depth, kind, sites, evidence) => {
+      made++;
+      if (path.has(id)) return { id, kind, sites, evidence, cycle: true, children: [] };
+      if (depth > maxDepth || made > TRACE_MAX_NODES)
+        return { id, kind, sites, evidence, cycle: false, children: [], truncated: true };
       path.add(id);
       // 兄弟は「親の中での呼び出し行順」に並べる(=コードを上から読む順)。
       // 呼び出し位置が無いエッジ(import 等)は後ろに名前順で置く
-      const children = (adj.get(id) || [])
-        .slice()
+      // 同じ呼び出しが「パッケージ単位」と「関数単位」の 2 本で入ってくることがある
+      // (RPC は呼び出し元パッケージにも関数にも線を張る)。粗いほうは情報を足さないうえ、
+      // それ以上さかのぼれないので「そこで途切れた」ように見える。細かいほうがあれば落とす
+      const kids = (adj.get(id) || []).slice();
+      const coarse = new Set();
+      if (opts.dedupeCoarse) {
+        const kidIds = new Set(kids.map((k) => k.to));
+        for (const k of kids) {
+          let p = (byId.get(k.to) || {}).parent;
+          for (let guard = 0; p !== undefined && guard < 100; guard++) {
+            if (kidIds.has(p)) coarse.add(p);
+            p = (byId.get(p) || {}).parent;
+          }
+        }
+      }
+      const children = kids
+        .filter((k) => !(opts.dedupeCoarse && coarse.has(k.to)) && !(opts.skipMocks && isMockNode(k.to)))
         .sort((a, b) => {
           const la = a.sites && a.sites.length > 0 ? a.sites[0].l : Infinity;
           const lb = b.sites && b.sites.length > 0 ? b.sites[0].l : Infinity;
           if (la !== lb) return la - lb;
           return a.to < b.to ? -1 : 1;
         })
-        .map((n) => build(n.to, path, depth + 1, n.kind, n.sites));
+        .map((n) => build(n.to, path, depth + 1, n.kind, n.sites, n.evidence));
       path.delete(id);
-      return { id, kind, sites, cycle: false, children };
+      return { id, kind, sites, evidence, cycle: false, children };
     };
     return build(focusId, new Set(), 0);
   }
@@ -374,6 +410,11 @@
     pathQuery: '', // 経路探索: 相手ノードの検索文字列
     pathTarget: null, // 経路探索: 相手ノード id
     structKinds: new Set(['import', 'call', 'boundary']), // 表示する依存線の種類
+    dgIsolated: false, // 図: 孤立ノード(どこにも繋がらないもの)を展開するか
+    dgApiOnly: false, // 図: 公開 API を持つものだけ表示するか
+    dgHop: false, // 図: 選択ノードから 1 ホップだけ表示するか
+    dgQ: '', // 図: 絞り込み文字列(一致しないものを減光する)
+    dgApi: null, // 図: 右パネルで選んだ RPC。呼び出し元サービスを図で強調する
     tab: 'structure', // 'structure' | 'api'
     apiRpc: null, // API タブで選択中の RPC id
     apiSel: null, // フロー内で選択中のノード id(ソース表示対象)
@@ -384,6 +425,11 @@
     apiUsage: new Map(), // 使用状況: 'called' | 'testonly' | 'dead'(含むは OR、除外は常に適用)
     apiAttrs: new Map(), // 属性: 'noimpl' | 'deprecated' | 'stream'(同上。使用状況とは AND)
     apiExcludeTests: false, // テスト呼び出しを無視して本番コードだけで判定
+    // 取り込んだ .proto には、このワークスペースが使わない RPC も全部入っている。
+    // 既定では「呼ばれている / 実装されている」ものだけに絞る(チップで解除できる)
+    apiUsedOnly: true,
+    // mock(gomock 等の生成物・手書きのモック)を呼び出し元・実装から外す
+    apiExcludeMocks: false,
     apiCollapsed: new Set(), // 折りたたまれた proto の id
     apiFilterCollapsed: false, // API カタログのフィルタを畳む(sticky ヘッダを小さく)
     searchExcludeTests: false, // 構造ビュー: テスト関連(testsupport / *_test 等)を表示から除外
@@ -478,6 +524,24 @@
     render();
   }
 
+  /**
+   * 解析台帳のバッジ。「未解決 0 件」は「完全に解析できた」ではないので、
+   * 見えなかったと分かっている量と、無効なアナライザを常に見せる。
+   */
+  function coverageBadge() {
+    const c = model.coverage;
+    if (!c) return '';
+    const gaps = c.files.failed + c.imports.unresolved + c.rpcCalls.unresolved + c.ambiguous;
+    const off = Object.keys(c.analyzers).filter((k) => !c.analyzers[k]);
+    const tip =
+      `読めたファイル ${c.files.read} / 読めなかった ${c.files.failed}\n` +
+      `未解決の import ${c.imports.unresolved} ・ 未解決の RPC 呼び出し ${c.rpcCalls.unresolved} ・ 曖昧で繋がなかった箇所 ${c.ambiguous}\n` +
+      (off.length > 0 ? `無効なアナライザ: ${off.join(', ')}(この種の依存は最初から出ません)\n` : '') +
+      'この数は「見えなかったと分かっている量」です。動的なパス組み立てやリフレクションは、そもそも数えられません';
+    const cls = gaps > 0 ? 'cov-badge warn' : 'cov-badge';
+    return `<b class="${cls}" title="${esc(tip)}">解析 ${gaps === 0 ? '欠落なし' : `欠落 ${gaps}`}${off.length > 0 ? ` ・ 無効 ${off.length}` : ''}</b> ・ `;
+  }
+
   function persistHidden() {
     try {
       if (typeof localStorage !== 'undefined') {
@@ -511,7 +575,7 @@
   const KIND_ICON = {
     service: '◆', module: '▣', package: '□', dir: '▢',
     file: '·', proto: '⬡', func: 'ƒ', rpc: '⚡', topic: '✉',
-    route: '⇄', gqlfield: '◈',
+    route: '⇄', gqlfield: '◈', artifact: '⬚',
   };
   const ROW = 24;
   const TREE_TOP = 8;
@@ -527,7 +591,7 @@
   const KIND_CHIP = {
     service: 'S', module: 'M', package: 'P', dir: '·',
     file: '·', proto: '⬢', func: 'ƒ', rpc: '⚡', topic: '✉',
-    route: 'H', gqlfield: 'G',
+    route: 'H', gqlfield: 'G', artifact: '⬚',
   };
   if (model.warnings && model.warnings.length) {
     const badge = $('#warnbadge');
@@ -682,11 +746,16 @@
         n.meta && n.meta.interceptors && n.meta.interceptors.length
           ? `<span class="icept" title="gRPC インターセプタ(全 RPC の前段で実行):\n${esc(n.meta.interceptors.join('\n'))}">🛡 ${n.meta.interceptors.length}</span>`
           : '';
+      // 中継「候補」まで。実際の通信経路・層数は静的には決まらないので、そこは主張しない
+      const relay =
+        n.meta && n.meta.relayCandidate
+          ? `<span class="relaychip" title="同じ RPC を実装しつつ自分でも呼んでいます(Gateway / Federation のような素通しの中継である可能性)。\n実際の通信経路や層数は静的解析では決まりません">中継候補</span>`
+          : '';
       parts.push(
         `<div class="${classes.join(' ')}" data-id="${esc(r.id)}" style="padding-left:${r.depth * 16}px" title="${esc(r.id)}">` +
           `<span class="tw" data-tw="1">${tw}</span>` +
           `<span class="ic">${KIND_CHIP[n.kind] || '·'}</span>` +
-          `<span class="lb">${esc(n.label)}</span>${lvlTag}${icept}${loc}` +
+          `<span class="lb">${esc(n.label)}</span>${lvlTag}${relay}${icept}${loc}` +
           `<span class="bmbtn${state.bookmarks.has(r.id) ? ' on' : ''}" data-bm="1" role="button" ` +
           `aria-label="ブックマーク" title="ブックマーク(b キーでも切替。ヘッダの ★ から一覧)">` +
           `${state.bookmarks.has(r.id) ? '★' : '☆'}</span>` +
@@ -802,6 +871,7 @@
       : '';
     statsEl.innerHTML =
       `${model.nodes.length} nodes ・ ${model.edges.length} deps ・ ` +
+      coverageBadge() +
       `<b class="cyc-badge" title="クリックすると循環しているノードの一覧を表示します">循環 ${cycleGroups.length}</b> ・ ` +
       `<b class="up-badge" title="レイヤー違反(下の層 → 上の層)の線の本数。ツールバーの「⚠ レイヤー違反のみ」で絞り込めます">上向き ${upCount}</b>` +
       hitBadge +
@@ -817,6 +887,7 @@
         state.structHidden = new Set();
         persistHidden();
         render();
+        if (state.tab === 'diagram') renderDiagram(); // バッジは図タブでも押せる
       });
     const bmBadgeEl = statsEl.querySelector('.bm-badge');
     if (bmBadgeEl)
@@ -829,16 +900,27 @@
   }
 
   // ---------- サイドパネル ----------
+  function oneFileLink(file, lineNo, label) {
+    if (IS_STATIC) {
+      // エクスポート HTML にはサーバーが無いので vscode:// スキームに頼る
+      const href = 'vscode://file' + encodeURI(model.root + '/' + file) + ':' + lineNo;
+      return `<a href="${href}">${esc(label)}</a>`;
+    }
+    return `<a href="#" class="editorlink" data-open-file="${esc(file)}" data-open-line="${lineNo}" title="ローカルのエディタで開く">${esc(label)}</a>`;
+  }
   function fileLink(n) {
     const meta = n.meta || {};
     if (!meta.file) return '';
     const lineNo = meta.line || 1;
-    if (IS_STATIC) {
-      // エクスポート HTML にはサーバーが無いので vscode:// スキームに頼る
-      const href = 'vscode://file' + encodeURI(model.root + '/' + meta.file) + ':' + lineNo;
-      return `<a href="${href}">${esc(meta.file)}:${lineNo}</a>`;
-    }
-    return `<a href="#" class="editorlink" data-open-file="${esc(meta.file)}" data-open-line="${lineNo}" title="ローカルのエディタで開く">${esc(meta.file)}:${lineNo}</a>`;
+    const main = oneFileLink(meta.file, lineNo, meta.file + ':' + lineNo);
+    // build tag で排他な別実装は同じノードに畳まれる。畳んだ事実を隠さない
+    const others = (meta.variants || []).filter((f) => f !== meta.file);
+    if (others.length === 0) return main;
+    return (
+      main +
+      ` <span class="loc" title="build tag などで排他な別定義。図では 1 つのノードに畳んでいます">` +
+      `他 ${others.length} 定義: ${others.map((f) => oneFileLink(f, 1, f)).join(' / ')}</span>`
+    );
   }
   // エディタ起動はサーバー(/open)経由。vscode:// を扱えないブラウザでも動く
   document.addEventListener('click', (ev) => {
@@ -878,6 +960,19 @@
       kids +
       `</div>`
     );
+  }
+
+  /** デプロイ定義(k8s)から読んだ配置。どこで動いているかはコードから読めない情報 */
+  function deploySection(n) {
+    const d = (n.meta || {}).deploy;
+    if (!d) return '';
+    const rows = [];
+    if (d.service) rows.push(`Service: ${esc(d.service)}${d.namespace ? ' (ns: ' + esc(d.namespace) + ')' : ''}`);
+    if (d.workloads && d.workloads.length) rows.push(esc(d.workloads.join(', ')));
+    if (d.image) rows.push(`image: ${esc(d.image)}`);
+    if (d.replicas !== undefined) rows.push(`replicas: ${esc(String(d.replicas))}`);
+    if (!rows.length) return '';
+    return `<div class="sec">デプロイ</div><div class="sub">${rows.join('<br>')}</div>`;
   }
 
   // 経路探索セクション(サイドパネル共通)
@@ -1059,30 +1154,28 @@
       // 生エッジをトップレベルに集約(画面の展開状態に依存しない)。
       // 共有 proto/ ディレクトリ構成では RPC ノードが proto 側にぶら下がるため、
       // RPC への依存は「そのRPCを実装しているサービス」に付け替えて集計する
-      const implTopOf = (rpcId) => {
+      // 実装は 1 つとは限らない。1 つだけ採ると、選ばれなかったサービスの依存が消える
+      const implTopsOf = (rpcId) => {
         const impls = rpcImpls.get(rpcId);
-        return impls && impls.size > 0 ? chain([...impls][0])[0] : null;
+        return impls && impls.size > 0 ? [...new Set([...impls].map((i) => chain(i)[0]))] : [];
       };
-      const svcTopOfTarget = (toId) => {
+      const svcTopsOfTarget = (toId) => {
         const toNode = byId.get(toId);
         if (toNode && toNode.kind === 'rpc') {
-          const t = implTopOf(toId);
-          if (t) return t;
+          const t = implTopsOf(toId);
+          if (t.length > 0) return t;
         } else if (toNode && toNode.kind === 'proto') {
-          for (const kid of childrenOf.get(toId) || []) {
-            const t = implTopOf(kid);
-            if (t) return t;
-          }
+          const all = new Set();
+          for (const kid of childrenOf.get(toId) || []) for (const t of implTopsOf(kid)) all.add(t);
+          if (all.size > 0) return [...all];
         }
-        return chain(toId)[0];
+        return [chain(toId)[0]];
       };
       const outMap = new Map(); // topId -> {count, rpc, code, items:[{from,to,count,isRpc}]}
       const inMap = new Map();
       for (const e of model.edges) {
         if (e.kind === 'impl') continue;
         const tu = chain(e.from)[0];
-        const tv = svcTopOfTarget(e.to);
-        if (tu === tv || (tu !== n.id && tv !== n.id)) continue;
         const isRpc = e.kind === 'rpc' || e.kind === 'proto' || e.kind === 'http' || e.kind === 'graphql';
         const bump = (map, key) => {
           const cur = map.get(key) || { count: 0, rpc: 0, code: 0, items: [] };
@@ -1092,10 +1185,14 @@
           cur.items.push({ from: e.from, to: e.to, count: e.count, isRpc });
           map.set(key, cur);
         };
-        if (tu === n.id) bump(outMap, tv);
-        if (tv === n.id) bump(inMap, tu);
+        for (const tv of svcTopsOfTarget(e.to)) {
+          if (tu === tv || (tu !== n.id && tv !== n.id)) continue;
+          if (tu === n.id) bump(outMap, tv);
+          if (tv === n.id) bump(inMap, tu);
+        }
       }
       const DRILL_CAP = 30; // 1 サービスあたりの関数レベル表示上限
+      const API_PICK_CAP = 60; // 図で追う API 一覧の表示上限(それ以上はカタログ側で探す)
       // 関数レベルの内訳(呼び出し元関数 → 呼び出し先 RPC/関数)。クリックで該当ノードへ。
       const drillList = (d) => {
         const items = d.items.slice().sort((a, b) => b.count - a.count);
@@ -1132,15 +1229,20 @@
       let called = 0;
       let testOnly = 0;
       const protoSvcNames = new Set();
+      const ownRpcs = []; // 図タブで「どこから呼ばれているか」を選ぶための一覧
       for (const nn of model.nodes) {
         if (nn.kind !== 'rpc') continue;
-        const owner = implTopOf(nn.id) || chain(nn.id)[0]; // 実装サービス優先で帰属
-        if (owner !== n.id) continue;
+        const owners = implTopsOf(nn.id); // 実装サービス優先で帰属(複数なら全部)
+        if (!(owners.length > 0 ? owners : [chain(nn.id)[0]]).includes(n.id)) continue;
         rpcTotal++;
         if (nn.label.includes('.')) protoSvcNames.add(nn.label.slice(0, nn.label.indexOf('.')));
+        const callerTops = new Set([...(rpcCallers.get(nn.id) || [])].map((c) => chain(c)[0]));
         if ((rpcCallers.get(nn.id) || new Set()).size > 0) called++;
         else if (((nn.meta || {}).testCallers || 0) > 0) testOnly++;
+        ownRpcs.push({ id: nn.id, label: nn.label, callers: callerTops.size });
       }
+      // 呼ばれている数の多い順。図で追いたいのはたいてい呼び出し元の多い API
+      ownRpcs.sort((a, b) => b.callers - a.callers || a.label.localeCompare(b.label));
       const dead = rpcTotal - called - testOnly;
       const apiSum =
         rpcTotal > 0
@@ -1148,6 +1250,24 @@
             `<ul><li class="nostyle">本番から呼ばれる<span class="cnt">${called}</span></li>` +
             `<li class="nostyle">テストのみ<span class="cnt">${testOnly}</span></li>` +
             `<li class="nostyle">未使用<span class="cnt">${dead}</span></li></ul>` +
+            // 図タブでは API を選んで「どのサービスから呼ばれているか」を図の上で見られるようにする
+            (state.tab === 'diagram'
+              ? `<div class="sub">選ぶと、その API を呼んでいるサービスを図で強調します</div>` +
+                `<ul class="apipick">` +
+                ownRpcs
+                  .slice(0, API_PICK_CAP)
+                  .map(
+                    (r) =>
+                      `<li class="apipick-item${state.dgApi === r.id ? ' on' : ''}" data-dgapi="${esc(r.id)}" ` +
+                      `title="${esc(r.id)}">⚡ ${esc(r.label)}` +
+                      `<span class="cnt">${r.callers > 0 ? r.callers + ' サービスから' : '呼び出し元なし'}</span></li>`,
+                  )
+                  .join('') +
+                (ownRpcs.length > API_PICK_CAP
+                  ? `<li class="sub">…他 ${ownRpcs.length - API_PICK_CAP} 件は API カタログで</li>`
+                  : '') +
+                `</ul>`
+              : '') +
             `<div class="btns"><button id="btn-svc-api">⚡ API カタログで見る</button></div>`
           : '';
       const isolated =
@@ -1163,17 +1283,23 @@
             arr.map((v) => `<li class="nostyle">${esc(v)}</li>`).join('') +
             '</ul>'
           : '';
+      const relaySum = meta.relayCandidate
+        ? '<div class="sec">中継候補</div><ul><li class="nostyle">同じ RPC を実装しつつ自分でも呼んでいます。' +
+          '実際にどの実装へ到達するかは実行時に決まるため、経路・層数は示していません。</li></ul>'
+        : '';
       const iceptSum = listSec('🛡 インターセプタ(全 RPC の前段)', meta.interceptors);
       const envSum = listSec('⚙ 設定(環境変数)', meta.envVars);
       sideEl.innerHTML =
         `<h3>${KIND_ICON[n.kind] || '◆'} ${esc(n.label)}</h3>` +
         `<div class="sub">${esc(n.id)}</div>` +
+        deploySection(n) +
         isolated +
         `<div class="sec">依存先サービス (${outMap.size})</div>` +
         `<div class="svclist">${sorted(outMap).map(svcItem).join('') || '<div class="sub">なし</div>'}</div>` +
         `<div class="sec">依存元サービス (${inMap.size})</div>` +
         `<div class="svclist">${sorted(inMap).map(svcItem).join('') || '<div class="sub">なし</div>'}</div>` +
         apiSum +
+        relaySum +
         iceptSum +
         envSum +
         buildPathSection(n);
@@ -1217,12 +1343,14 @@
     if (n.lang) metaInfo.push(n.lang);
     if (n.loc) metaInfo.push(n.loc + ' 行');
     const services = n.meta && n.meta.services ? `<div class="sub">service: ${esc(n.meta.services.join(', '))}</div>` : '';
+    const deployHtml = deploySection(n);
     const docHtml = n.meta && n.meta.doc ? `<div class="rpcdoc sidedoc">${esc(n.meta.doc)}</div>` : '';
     sideEl.innerHTML =
       `<h3>${KIND_ICON[n.kind] || '·'} ${esc(n.label)}</h3>` +
       docHtml +
       `<div class="sub">${esc(n.id)}<br>${metaInfo.join(' ・ ')} ${fileLink(n)}</div>` +
       services +
+      deployHtml +
       traceButtons +
       traceHtml +
       buildPathSection(n) +
@@ -1253,9 +1381,32 @@
   const apiSrcEl = $('#apisrc');
   const IS_STATIC = !!window.STRATA_MODEL; // export された HTML では /source が使えない
 
+  // 生成物(artifact)は元 proto が手元に無い API の唯一の定義元なので、proto と同じ棚に並べる。
+  // 元 proto が手元にある生成物は RPC を持たない(定義は proto 側)ので棚には出さない
+  const hasRpcChild = (id) => model.nodes.some((c) => c.parent === id && c.kind === 'rpc');
   const protoNodes = model.nodes
-    .filter((n) => n.kind === 'proto')
+    .filter((n) => n.kind === 'proto' || (n.kind === 'artifact' && hasRpcChild(n.id)))
     .sort((a, b) => a.id.localeCompare(b.id));
+  const artifactCount = protoNodes.filter((n) => n.kind === 'artifact').length;
+  // mock 判定: パス片・ファイル名の mock/mocks、型名の Mock〜。
+  // gomock(mock_foo.go / mocks/foo.go)と手書きの MockFooClient のどちらも拾う
+  // 慣習外の場所に置かれたテストダブルも拾う。実際に testsupport/FakeUserService が
+  // 本物の実装と同じ証拠で「UserService の実装」として並んでいた
+  const MOCK_PATH = /(^|[/_.-])(mocks?|fakes?|stubs?|doubles?|testsupport|testutils?|testhelpers?)([/_.-]|$)/i;
+  const MOCK_TYPE = /(^|[#./])(Mock|Fake|Stub|Spy|Dummy)[A-Z0-9_]|(Mock|Fake|Stub|Spy|Dummy)$/;
+  function isMockNode(id) {
+    if (MOCK_PATH.test(id) || MOCK_TYPE.test(id)) return true;
+    const file = ((byId.get(id) || {}).meta || {}).file;
+    return typeof file === 'string' && MOCK_PATH.test(file);
+  }
+  /** mock を外した集合(除外オフならそのまま返す)。 */
+  function withoutMocks(set) {
+    if (!state.apiExcludeMocks || !set || set.size === 0) return set || new Set();
+    const out = new Set();
+    for (const id of set) if (!isMockNode(id)) out.add(id);
+    return out;
+  }
+
   const rpcCallers = new Map(); // rpc id -> Set(呼び出し元 func id)
   const rpcImpls = new Map(); // rpc id -> Set(実装 func id)
   for (const e of model.edges) {
@@ -1373,7 +1524,11 @@
       state.apiSvcFilter !== '' ||
       state.apiCallerFilter !== '' ||
       state.apiUsage.size > 0 ||
-      state.apiAttrs.size > 0;
+      state.apiAttrs.size > 0 ||
+      state.apiExcludeMocks;
+    // 空表示の案内文だけは「コードに出てくるものだけ」も絞り込みとして数える。
+    // filtering 側に入れると、既定 ON なので節が常に開きっぱなしになる(「全て畳む」が効かない)
+    const anyFilter = filtering || state.apiUsedOnly;
     const groups = new Map(); // ディレクトリ -> proto nodes
     const allSvcs = new Set(); // フィルタ用のサービス名一覧
     let rpcTotal = 0;
@@ -1386,7 +1541,9 @@
         const label = byId.get(id).label;
         if (label.includes('.')) allSvcs.add(label.slice(0, label.indexOf('.')));
       }
-      const dir = p.id.includes('/') ? p.id.slice(0, p.id.lastIndexOf('/')) : '(ルート)';
+      // 生成物はノード id に artifact: 接頭辞が付くので、見出しでは落とす
+      const dirId = p.id.replace(/^artifact:/, '');
+      const dir = dirId.includes('/') ? dirId.slice(0, dirId.lastIndexOf('/')) : '(ルート)';
       if (!groups.has(dir)) groups.set(dir, []);
       groups.get(dir).push({ p, rpcKids });
     }
@@ -1401,8 +1558,8 @@
           const label = byId.get(id).label;
           const svc = label.includes('.') ? label.slice(0, label.indexOf('.')) : '(service)';
           if (state.apiSvcFilter && svc !== state.apiSvcFilter) continue;
-          const callers = rpcCallers.get(id) || new Set();
-          const impls = rpcImpls.get(id) || new Set();
+          const callers = withoutMocks(rpcCallers.get(id));
+          const impls = withoutMocks(rpcImpls.get(id));
           const meta = (byId.get(id) || {}).meta || {};
           const testN = state.apiExcludeTests ? 0 : meta.testCallers || 0;
           const callerSvcs = new Set([...callers].map((c) => topLabelOfId(c)));
@@ -1413,6 +1570,9 @@
               continue;
             }
           }
+          // 取り込んだ proto カタログのうち、このワークスペースのコードに出てこない RPC を落とす。
+          // 呼び出しか実装のどちらかがあれば「出てくる」とみなす
+          if (state.apiUsedOnly && callers.size === 0 && impls.size === 0 && testN === 0) continue;
           // 使用状況(排他的な3区分)と属性: グループ内は 含む(OR)+ 除外、グループ間は AND
           const usage = callers.size > 0 ? 'called' : testN > 0 ? 'testonly' : 'dead';
           if (state.apiUsage.get(usage) === 'exc') continue;
@@ -1456,7 +1616,9 @@
             callers.size === 0
               ? testN > 0
                 ? ` <span class="warnmark badge-test" title="本番コードからの呼び出しは未検出だが、テスト(${testN} ファイル)は呼んでいる">テストのみ</span>`
-                : ' <span class="warnmark badge-dead" title="呼び出し元が未検出(未使用の可能性)">未使用?</span>'
+                : ' <span class="warnmark badge-dead" title="このワークスペースの解析では呼び出し元を検出できませんでした。&#10;' +
+                  '「使われていない」とは限りません — 解析の対象外(別リポジトリ・外部の利用者)、動的なパス組み立て、' +
+                  'リフレクション経由の呼び出しは検出できません。削除の判断に使う前に strata doctor で解析の欠落を確認してください">呼び出し元 未検出</span>'
               : '';
           const shortLabel = label.includes('.') ? label.slice(label.indexOf('.') + 1) : label;
           const selected = state.apiRpc === id ? ' selected' : '';
@@ -1477,7 +1639,7 @@
           });
         }
         rpcShown += rpcItems.size;
-        if (rpcItems.size === 0 && filtering) continue; // フィルタ中は一致なしの proto を出さない
+        if (rpcItems.size === 0 && anyFilter) continue; // 絞り込み中は一致なしの proto を出さない(見出しだけ残さない)
         // service ごとに RPC を束ねる(RPC label は "Service.Rpc")。呼び出し数順は各グループ内で適用
         let entries = [...rpcItems.entries()];
         if (state.apiSort === 'calls') entries = entries.sort((a, b) => b[1].calls - a[1].calls);
@@ -1518,8 +1680,8 @@
       if (surfaceBlocked || nodes.length === 0) return '';
       const bySvc = new Map();
       for (const n of nodes) {
-        const callers = rpcCallers.get(n.id) || new Set();
-        const impls = rpcImpls.get(n.id) || new Set();
+        const callers = withoutMocks(rpcCallers.get(n.id));
+        const impls = withoutMocks(rpcImpls.get(n.id));
         const callerSvcs = new Set([...callers].map((c) => topLabelOfId(c)));
         if (state.apiCallerFilter) {
           if (state.apiCallerFilter === '(test)') continue;
@@ -1544,7 +1706,8 @@
               : ' <span class="warnmark badge-noimpl" title="ハンドラ / リゾルバの実装が未検出">実装なし</span>';
         const dead =
           callers.size === 0
-            ? ' <span class="warnmark badge-dead" title="呼び出し元が未検出(このリポジトリ内からは呼ばれていない)">呼び出し元なし</span>'
+            ? ' <span class="warnmark badge-dead" title="このワークスペースの解析では呼び出し元を検出できませんでした。&#10;' +
+              '解析対象外の利用者・動的な呼び出しは検出できないので、「使われていない」とは限りません">呼び出し元 未検出</span>'
             : '';
         const selected = state.apiRpc === n.id ? ' selected' : '';
         const surfaceHover =
@@ -1624,7 +1787,9 @@
       `<div class="frow chips"><label>使用状況</label><div class="chiprow">` +
       cycleChip(state.apiUsage, 'called', '本番で使用', '本番コードから呼ばれている RPC') +
       (state.apiExcludeTests ? '' : cycleChip(state.apiUsage, 'testonly', 'テストのみ', 'テストからだけ呼ばれている RPC')) +
-      cycleChip(state.apiUsage, 'dead', '未使用', 'どこからも呼ばれていない RPC(死んだ API 候補)') +
+      cycleChip(state.apiUsage, 'dead', '呼び出し元 未検出',
+        'この解析では呼び出し元が見つからなかった RPC。&#10;' +
+        '「未使用」の証明ではありません(解析対象外の利用者・動的な呼び出しは検出できません)') +
       `</div></div>` +
       `<div class="frow chips"><label>属性</label><div class="chiprow">` +
       cycleChip(state.apiAttrs, 'noimpl', '実装なし', '実装ハンドラが見つからない RPC') +
@@ -1632,6 +1797,11 @@
       cycleChip(state.apiAttrs, 'stream', 'stream', 'ストリーミング RPC') +
       `</div></div>` +
       `<div class="frow chips"><label>オプション</label><div class="chiprow">` +
+      exclChip('mocks', state.apiExcludeMocks, 'mock を除外',
+        'gomock などの生成物・手書きのモック(パスや型名の mock / Mock〜)を、呼び出し元・実装から外す') +
+      exclChip('used', state.apiUsedOnly, 'コードに出てくるものだけ',
+        'このワークスペースのコードから呼ばれている、または実装されている RPC だけを表示する。\n' +
+        '取り込んだ proto カタログのうち、使っていない定義を隠す(HTTP / GraphQL はコード由来なので常に表示)') +
       exclChip('tests', state.apiExcludeTests, 'テスト呼び出しを無視', 'テストからの呼び出しを無視して、本番コードだけで使用状況を判定する') +
       `</div></div>` +
       `</div>`;
@@ -1643,7 +1813,9 @@
       (state.apiSort !== 'name' ? 1 : 0) +
       state.apiUsage.size +
       state.apiAttrs.size +
-      (state.apiExcludeTests ? 1 : 0);
+      (state.apiExcludeTests ? 1 : 0) +
+      (state.apiUsedOnly ? 1 : 0) +
+      (state.apiExcludeMocks ? 1 : 0);
     const ftoggle =
       `<button class="ftoggle${activeFilters > 0 ? ' active' : ''}" data-ftoggle="1" ` +
       `title="フィルタを${state.apiFilterCollapsed ? '開く' : '畳む'}">` +
@@ -1652,18 +1824,51 @@
       (routeNodes.length > 0 ? ` ・ ${routeNodes.length} HTTP` : '') +
       (gqlNodes.length > 0 ? ` ・ ${gqlNodes.length} GraphQL` : '');
     const sum =
-      `${protoNodes.length} proto ・ ${allSvcs.size} service ・ ${rpcTotal} RPC${surfaceSum}${shownNote}` +
+      `${protoNodes.length - artifactCount} proto` +
+      (artifactCount > 0 ? ` ・ ${artifactCount} 生成物` : '') +
+      ` ・ ${allSvcs.size} service ・ ${rpcTotal} RPC${surfaceSum}${shownNote}` +
       ` <span class="mini" data-pfall="collapse">全て畳む</span><span class="mini" data-pfall="expand">全て開く</span>`;
     apiListEl.innerHTML =
       `<div class="apihead">` +
       `<div class="sum">${ftoggle}${sum}</div>` +
       (state.apiFilterCollapsed ? '' : filters) +
       `</div>` +
+      unresolvedSection() +
       (sections.join('') ||
-        (filtering
+        (anyFilter
           ? '<div class="sum">フィルタに一致する API がありません</div>'
           : '<div class="sum">API(proto / HTTP ルート / GraphQL スキーマ)が見つかりませんでした。</div>'));
     if (typeof updateApiHeadMin === 'function') updateApiHeadMin();
+  }
+
+  // 解決できなかった参照。推測で線を引かずに残したものを、設定を書く手掛かりとして見せる
+  const UNRESOLVED_LABEL = {
+    artifact: '生成物から逆引き不可',
+    env: '環境変数が未解決',
+    dynamic: '動的生成',
+  };
+
+  function unresolvedSection() {
+    const list = model.unresolved || [];
+    if (list.length === 0) return '';
+    const rows = list
+      .map((u) => {
+        const where = u.file ? `${u.file}${u.line ? ':' + u.line : ''}` : u.from;
+        const jump = u.file ? ' jump' : '';
+        return (
+          `<li class="rpc-item unres-item${jump}" data-unres-file="${esc(u.file || '')}" data-unres-line="${u.line || 1}"` +
+          ` title="${esc(u.hint || '')}">` +
+          `<span class="warnmark badge-unres">${esc(UNRESOLVED_LABEL[u.reason] || u.reason)}</span> ${esc(u.detail)}` +
+          `<span class="cnt">${esc(where)}</span></li>`
+        );
+      })
+      .join('');
+    return (
+      `<div class="protosec unres">` +
+      `<div class="sum">未解決の参照 ${list.length} 件 — 決め手が無いので繋いでいません` +
+      `(strata.config.json の indirection / infra で繋がる可能性があります)</div>` +
+      `<ul class="rpclist">${rows}</ul></div>`
+    );
   }
 
   // フロー図: RPC → 実装サービス → 関数 → … → 別サービスの RPC → … を入れ子で描く
@@ -1692,6 +1897,7 @@
       : '';
     const cyc = node.cycle ? '<span class="cycmark">↻ 循環</span>' : '';
     const trunc = node.truncated ? '<span class="floc">…(深さ上限)</span>' : '';
+    const ev = evidenceChip(node);
     const selected = state.apiSel === node.id && !node.cycle ? ' selected' : '';
     const kids = node.children.map((c) => renderFlowNode(c, top, false, dir)).join('');
     // ホバーで説明文(docコメント)を表示。無ければノード ID
@@ -1705,6 +1911,7 @@
       `<span class="lb">${esc(n.label)}</span>` +
       floc +
       siteChip +
+      ev +
       cyc +
       trunc +
       `</div>` +
@@ -1722,10 +1929,13 @@
       return;
     }
     const n = byId.get(state.apiRpc);
-    const downTree = traceTree(n.id, 'down', 12);
-    const upTree = traceTree(n.id, 'up', 6);
-    const impls = rpcImpls.get(n.id) || new Set();
-    const callers = rpcCallers.get(n.id) || new Set();
+    const skipMocks = state.apiExcludeMocks;
+    const downTree = traceTree(n.id, 'down', 12, { skipMocks, dedupeCoarse: true });
+    // 上流は「別のマイクロサービスまで」辿れる深さが要る。
+    // handler → usecase → …(数段)→ 実装 → RPC → 呼び出し元 とホップするため
+    const upTree = traceTree(n.id, 'up', 12, { skipMocks, dedupeCoarse: true });
+    const impls = withoutMocks(rpcImpls.get(n.id));
+    const callers = withoutMocks(rpcCallers.get(n.id));
     const protoFile = fileOf(n) || (n.parent ? n.parent : '');
     const implNote =
       impls.size > 0
@@ -1761,14 +1971,17 @@
       (nm.deprecated ? ' <span class="warnmark badge-dep">deprecated</span>' : '') +
       (nm.streaming ? ` <span class="warnmark badge-stream" title="streaming">⇄ ${esc(nm.streaming)}</span>` : '') +
       (nm.webhook ? ' <span class="warnmark badge-hook" title="webhook の受信口 / 送信先">webhook</span>' : '') +
-      (nm.framework ? ` <span class="warnmark badge-fw" title="検出したフレームワーク">${esc(nm.framework)}</span>` : '');
+      (nm.framework ? ` <span class="warnmark badge-fw" title="検出したフレームワーク">${esc(nm.framework)}</span>` : '') +
+      (nm.declared ? ' <span class="warnmark badge-decl" title="OpenAPI 仕様書で宣言されたエンドポイント。実装はコード側の行">宣言</span>' : '');
     const sig = nm.req
       ? `<div class="sub">${nm.streaming === 'client' || nm.streaming === 'bidi' ? 'stream ' : ''}${esc(nm.req)} → ` +
         `${nm.streaming === 'server' || nm.streaming === 'bidi' ? 'stream ' : ''}${esc(nm.res)}</div>`
       : nm.gqlType
         ? `<div class="sub">${esc(nm.gqlKind || 'query')} → ${esc(nm.gqlType)}</div>`
         : nm.method
-          ? `<div class="sub">${esc(nm.method)} ${esc(nm.path || '')}</div>`
+          ? `<div class="sub">${esc(nm.method)} ${esc(nm.path || '')}` +
+            (nm.operationId ? ` <span class="loc">operationId: ${esc(nm.operationId)}</span>` : '') +
+            `</div>`
           : '';
     const docHtml = nm.doc ? `<div class="rpcdoc flowdoc">${esc(nm.doc)}</div>` : '';
     const headIcon = n.kind === 'route' ? '⇄' : n.kind === 'gqlfield' ? '◈' : '⚡';
@@ -1784,6 +1997,25 @@
       testHtml +
       `<div class="sec">フロー(実装 → 下流)</div>` +
       `<div class="flow">${renderFlowNode(downTree, undefined, true, 'down')}</div>`;
+  }
+
+  // 線を引いた根拠。弱いものを黙って混ぜないよう、フローの各行に出す
+  const EVIDENCE_LABEL = {
+    exact: '完全修飾名の一致 — 強い',
+    configured: '設定 / API 仕様書で明示',
+    structural: '構造的な証拠(解決済み import / 生成コードの埋め込み / 登録)',
+    name: '名前が一致しただけ — 弱い',
+  };
+  /** rpc / impl の線に付いた根拠を、フローの行に出すチップにする。 */
+  function evidenceChip(edge) {
+    if (!edge || !edge.evidence) return '';
+    const weak = edge.evidence === 'name' ? ' weak' : '';
+    return ` <span class="evchip${weak}" title="${esc(EVIDENCE_LABEL[edge.evidence] || edge.evidence)}">${esc(edge.evidence)}</span>`;
+  }
+
+  /** 読み込み中の表示。待たせる画面はすべてこれを出す(無言で固まって見えるのを避ける)。 */
+  function loadingHtml(message) {
+    return `<div class="loadbox" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>${esc(message)}</div>`;
   }
 
   // ---------- ソースビューア ----------
@@ -1825,6 +2057,7 @@
     treeFilter: '',
     treeExpanded: new Set(),
     filesPromise: null, // /files の結果キャッシュ
+    renderSeq: 0, // 描画の世代。読み込み中に別ファイルを開かれたら古い結果を捨てる
     history: [], // 定義ジャンプ等の「戻る」用
     blameVisible: false, // git blame ガターの表示
     blameCache: new Map(), // rel -> {byLine: Map(行 -> info)} | {error}
@@ -2240,6 +2473,10 @@
         `<code>strata serve</code> で起動すると、ここに実際のコードが表示されます。</div>`;
       return;
     }
+    // 取得を待つ間、前のファイルのコードを出したままにしない(別ファイルを開いたつもりで
+    // 前のコードを読んでしまう)。ヘッダーだけ先に描いて本文を読み込み中にする
+    const token = ++srcState.renderSeq;
+    apiSrcEl.innerHTML = head + `<div class="srcbody">` + loadingHtml('ソースを読み込んでいます…') + `</div>`;
     let blame = null;
     let blameNote = '';
     if (srcState.blameVisible && !IS_STATIC) {
@@ -2287,6 +2524,12 @@
     if (srcState.treeVisible) {
       let files = [];
       try {
+        if (srcState.filesPromise === null && token === srcState.renderSeq) {
+          // 初回はワークスペース全体を歩くので待たせる。枠だけ先に出す
+          // (追い越されていたら書かない — 新しく開いたファイルの表示を潰してしまう)
+          apiSrcEl.innerHTML =
+            head + `<div class="srcbody"><div id="srctree">${loadingHtml('ファイル一覧を読み込んでいます…')}</div>${codeHtml}</div>`;
+        }
         files = await fetchFileList();
       } catch {
         // 一覧が取れなくてもコード表示は続行
@@ -2297,6 +2540,7 @@
         `<div class="tlist">${treeListHtml(files)}</div>` +
         `</div>`;
     }
+    if (token !== srcState.renderSeq) return; // 次の描画に追い越されたので捨てる
     apiSrcEl.innerHTML = head + `<div class="srcbody">` + treeHtml + codeHtml + `</div>`;
     if (scrollToLine && lineNo !== null) {
       const target = apiSrcEl.querySelector('#L' + lineNo);
@@ -2433,6 +2677,11 @@
   apiListEl.addEventListener('scroll', updateApiHeadMin);
 
   apiListEl.addEventListener('click', (ev) => {
+    const unres = ev.target.closest('.unres-item.jump');
+    if (unres) {
+      openSourceFile(unres.dataset.unresFile, Number(unres.dataset.unresLine) || 1);
+      return;
+    }
     const ftog = ev.target.closest('[data-ftoggle]');
     if (ftog) {
       // スクロールで自動最小化されている場合は、まず展開(ピン)するだけ
@@ -2450,8 +2699,14 @@
     }
     const exclEl = ev.target.closest('[data-chip-excl]');
     if (exclEl) {
-      state.apiExcludeTests = !state.apiExcludeTests;
-      if (state.apiExcludeTests) state.apiUsage.delete('testonly'); // 無視中は「テストのみ」は無意味
+      if (exclEl.dataset.chipExcl === 'used') {
+        state.apiUsedOnly = !state.apiUsedOnly;
+      } else if (exclEl.dataset.chipExcl === 'mocks') {
+        state.apiExcludeMocks = !state.apiExcludeMocks;
+      } else {
+        state.apiExcludeTests = !state.apiExcludeTests;
+        if (state.apiExcludeTests) state.apiUsage.delete('testonly'); // 無視中は「テストのみ」は無意味
+      }
       renderApi();
       return;
     }
@@ -2583,256 +2838,14 @@
   const diagramViewEl = $('#diagramview');
 
   /** サービス(トップレベル)単位のグラフ。RPC への依存は実装サービスに帰属させる。 */
-  function computeServiceGraph() {
-    const implTopOf = (rpcId) => {
-      const impls = rpcImpls.get(rpcId);
-      return impls && impls.size > 0 ? chain([...impls][0])[0] : null;
-    };
-    const targetTop = (toId) => {
-      const node = byId.get(toId);
-      if (node && node.kind === 'rpc') {
-        const t = implTopOf(toId);
-        if (t) return t;
-      } else if (node && node.kind === 'proto') {
-        for (const kid of childrenOf.get(toId) || []) {
-          const t = implTopOf(kid);
-          if (t) return t;
-        }
-      }
-      return chain(toId)[0];
-    };
-    const tops = (childrenOf.get('') || []).filter((id) => !state.structHidden.has(id));
-    const topSet = new Set(tops);
-    const edgeMap = new Map();
-    for (const e of model.edges) {
-      if (e.kind === 'impl') continue;
-      const a = chain(e.from)[0];
-      const b = targetTop(e.to);
-      if (a === b || !topSet.has(a) || !topSet.has(b)) continue;
-      const key = a + '\u0000' + b;
-      const cur = edgeMap.get(key) || { from: a, to: b, rpc: 0, http: 0, gql: 0, code: 0 };
-      if (e.kind === 'rpc' || e.kind === 'proto') cur.rpc += e.count;
-      else if (e.kind === 'http') cur.http += e.count;
-      else if (e.kind === 'graphql') cur.gql += e.count;
-      else cur.code += e.count;
-      edgeMap.set(key, cur);
-    }
-    return { tops, edges: [...edgeMap.values()] };
-  }
-
-  function renderDiagram() {
-    const { tops, edges } = computeServiceGraph();
-    if (tops.length === 0) {
-      diagramViewEl.innerHTML = '<div class="projwrap"><div class="sub">表示できるサービスがありません</div></div>';
-      return;
-    }
-    const labelOf = (id) => (byId.get(id) ? byId.get(id).label : id);
-    // レベル付け(依存される側が下)
-    const adj = new Map();
-    for (const e of edges) {
-      if (!adj.has(e.from)) adj.set(e.from, []);
-      adj.get(e.from).push(e.to);
-    }
-    const comps = tarjan(tops, adj);
-    const compOf = new Map();
-    comps.forEach((c, i) => c.forEach((id) => compOf.set(id, i)));
-    const compAdj = comps.map(() => new Set());
-    for (const e of edges) {
-      const a = compOf.get(e.from);
-      const b = compOf.get(e.to);
-      if (a !== undefined && b !== undefined && a !== b) compAdj[a].add(b);
-    }
-    const levels = new Array(comps.length).fill(-1);
-    const lvlOf = (i) => {
-      if (levels[i] >= 0) return levels[i];
-      levels[i] = 0;
-      let m = 0;
-      for (const d of compAdj[i]) m = Math.max(m, lvlOf(d) + 1);
-      levels[i] = m;
-      return m;
-    };
-    comps.forEach((_, i) => lvlOf(i));
-    const nodeLevel = new Map();
-    for (const id of tops) nodeLevel.set(id, levels[compOf.get(id)]);
-    const maxLevel = Math.max(...nodeLevel.values());
-    // 行 = レベル(上 = 依存する側)。孤立ノードは最下段の 1 つ下の帯にまとめる
-    const isolated = tops.filter(
-      (id) => !edges.some((e) => e.from === id || e.to === id),
-    );
-    const isolatedSet = new Set(isolated);
-    const rows = [];
-    for (let L = maxLevel; L >= 0; L--) {
-      const row = tops.filter((id) => nodeLevel.get(id) === L && !isolatedSet.has(id));
-      if (row.length > 0) rows.push({ level: L, ids: row.sort((a, b) => labelOf(a).localeCompare(labelOf(b))) });
-    }
-    if (isolated.length > 0) rows.push({ level: null, ids: isolated.sort((a, b) => labelOf(a).localeCompare(labelOf(b))) });
-    // 公開エンドポイント数(⚡RPC / ⇄HTTP / ◈GraphQL)と規模
-    const rpcCount = new Map();
-    const routeCount = new Map();
-    const gqlCount = new Map();
-    for (const n of model.nodes) {
-      if (n.kind === 'rpc') {
-        const impls = rpcImpls.get(n.id);
-        const owner = impls && impls.size > 0 ? chain([...impls][0])[0] : chain(n.id)[0];
-        rpcCount.set(owner, (rpcCount.get(owner) || 0) + 1);
-      } else if (n.kind === 'route' && !(n.meta && n.meta.external)) {
-        const owner = chain(n.id)[0];
-        routeCount.set(owner, (routeCount.get(owner) || 0) + 1);
-      } else if (n.kind === 'gqlfield') {
-        const owner = chain(n.id)[0];
-        gqlCount.set(owner, (gqlCount.get(owner) || 0) + 1);
-      }
-    }
-    // レイアウト
-    const BOXH = 54;
-    const VGAP = 96;
-    const HGAP = 26;
-    const PADX = 90;
-    const PADY = 34;
-    const widthOf = (id) => Math.max(128, labelOf(id).length * 8.5 + 44);
-    const pos = new Map(); // id -> {x, y, w}
-    function layoutRow(row, ri) {
-      let x = PADX;
-      const y = PADY + ri * (BOXH + VGAP);
-      for (const id of row.ids) {
-        const w = widthOf(id);
-        pos.set(id, { x: x + w / 2, y, w });
-        x += w + HGAP;
-      }
-    }
-    // 上の行から順に配置し、barycenter(既配置の隣接ノードの平均 x)で並べ替えて交差を減らす
-    layoutRow(rows[0], 0);
-    for (let ri = 1; ri < rows.length; ri++) {
-      const row = rows[ri];
-      const score = new Map();
-      for (const id of row.ids) {
-        const neigh = [];
-        for (const e of edges) {
-          if (e.from === id && pos.has(e.to)) neigh.push(pos.get(e.to).x);
-          if (e.to === id && pos.has(e.from)) neigh.push(pos.get(e.from).x);
-        }
-        score.set(id, neigh.length > 0 ? neigh.reduce((a, b) => a + b, 0) / neigh.length : Infinity);
-      }
-      row.ids.sort((a, b) => (score.get(a) ?? 0) - (score.get(b) ?? 0) || labelOf(a).localeCompare(labelOf(b)));
-      layoutRow(row, ri);
-    }
-    const totalW = Math.max(...[...pos.values()].map((p) => p.x + p.w / 2)) + PADX;
-    const totalH = PADY + rows.length * (BOXH + VGAP) - VGAP / 2 + PADY;
-    // 各行を中央寄せ
-    rows.forEach((row) => {
-      const right = Math.max(...row.ids.map((id) => pos.get(id).x + pos.get(id).w / 2));
-      const offset = (totalW - PADX - right) / 2;
-      for (const id of row.ids) pos.get(id).x += offset;
-    });
-
-    const svg = [];
-    svg.push(
-      `<defs><marker id="darr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 1 L9 5 L0 9 z" class="dg-mk"/></marker>` +
-        `<marker id="darr-up" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 1 L9 5 L0 9 z" class="dg-mk-up"/></marker></defs>`,
-    );
-    // レイヤー帯
-    rows.forEach((row, ri) => {
-      const y = PADY + ri * (BOXH + VGAP) - 18;
-      svg.push(`<rect x="8" y="${y}" width="${totalW - 16}" height="${BOXH + 44}" rx="12" class="dg-band${ri % 2 === 1 ? ' alt' : ''}"/>`);
-      const tag = row.level === null ? '独立' : `層 ${row.level}`;
-      svg.push(`<text x="20" y="${y + 24}" class="dg-lvl">${esc(tag)}</text>`);
-    });
-    // エッジ
-    for (const e of edges) {
-      const a = pos.get(e.from);
-      const b = pos.get(e.to);
-      if (!a || !b) continue;
-      const up = b.y < a.y;
-      const sameRow = b.y === a.y;
-      let d;
-      if (sameRow) {
-        const midY = a.y - 46;
-        d = `M ${a.x} ${a.y - BOXH / 2} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y - BOXH / 2}`;
-      } else if (!up) {
-        d = `M ${a.x} ${a.y + BOXH / 2} C ${a.x} ${a.y + BOXH / 2 + 44}, ${b.x} ${b.y - BOXH / 2 - 44}, ${b.x} ${b.y - BOXH / 2}`;
-      } else {
-        d = `M ${a.x} ${a.y - BOXH / 2} C ${a.x} ${a.y - BOXH / 2 - 44}, ${b.x} ${b.y + BOXH / 2 + 44}, ${b.x} ${b.y + BOXH / 2}`;
-      }
-      const width = Math.min(3.6, 1.1 + Math.log2(e.rpc + e.code + 1) * 0.55);
-      const cls = `dg-edge${up ? ' up' : ''}${e.rpc + e.http + e.gql > 0 ? ' rpc' : ''}`;
-      svg.push(
-        `<path d="${d}" class="${cls}" stroke-width="${width.toFixed(1)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" marker-end="url(#${up ? 'darr-up' : 'darr'})">` +
-          `<title>${esc(labelOf(e.from))} → ${esc(labelOf(e.to))}(${[
-            e.rpc > 0 ? '⚡RPC ' + e.rpc : '',
-            e.http > 0 ? '⇄HTTP ' + e.http : '',
-            e.gql > 0 ? '◈GraphQL ' + e.gql : '',
-            e.code > 0 ? 'code ' + e.code : '',
-          ].filter(Boolean).join(' ・ ')})</title></path>`,
-      );
-      const boundaryLabel = [
-        e.rpc > 0 ? '⚡' + e.rpc : '',
-        e.http > 0 ? '⇄' + e.http : '',
-        e.gql > 0 ? '◈' + e.gql : '',
-      ].filter(Boolean).join(' ');
-      if (boundaryLabel) {
-        const mx = a.x + (b.x - a.x) * 0.45;
-        const my = sameRow ? a.y - 50 : a.y + (b.y - a.y) * 0.45 + (up ? 8 : 0);
-        svg.push(`<text x="${mx}" y="${my}" class="dg-elabel${up ? ' up' : ''}" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${boundaryLabel}</text>`);
-      }
-    }
-    // ノード
-    for (const id of tops) {
-      const p = pos.get(id);
-      if (!p) continue;
-      const n = byId.get(id) || { kind: 'module' };
-      const parts = [];
-      if ((rpcCount.get(id) || 0) > 0) parts.push(`⚡${rpcCount.get(id)} RPC`);
-      if ((routeCount.get(id) || 0) > 0) parts.push(`⇄${routeCount.get(id)} HTTP`);
-      if ((gqlCount.get(id) || 0) > 0) parts.push(`◈${gqlCount.get(id)} GQL`);
-      if (subtreeLoc(id) > 0) parts.push(`${subtreeLoc(id).toLocaleString('en-US')} loc`);
-      const sub = parts.join(' ・ ');
-      svg.push(
-        `<g class="dg-node k-${n.kind}${id.startsWith('ext:') ? ' external' : ''}${state.focus === id ? ' focused' : ''}" data-node="${esc(id)}">` +
-          `<title>${esc(labelOf(id))}${sub ? ' — ' + esc(sub) : ''}\nクリックすると依存元・依存先・公開 API を表示します</title>` +
-          `<rect x="${p.x - p.w / 2}" y="${p.y - BOXH / 2}" width="${p.w}" height="${BOXH}" rx="10"/>` +
-          `<text x="${p.x}" y="${p.y - 4}" class="dg-label">${esc(labelOf(id))}</text>` +
-          `<text x="${p.x}" y="${p.y + 15}" class="dg-sub">${esc(sub)}</text>` +
-          `</g>`,
-      );
-    }
-    diagramViewEl.innerHTML =
-      `<div class="dg-hint">クリック = 詳細パネル(依存・公開API・経路探索) ・ ホバー = 関連する線を強調 ・ 上向きの<b class="dg-up-word">ローズの線</b> = レイヤー違反</div>` +
-      `<div class="dg-scroll"><svg id="dg-svg" xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">${svg.join('')}</svg></div>`;
-  }
-
-  diagramViewEl.addEventListener('click', (ev) => {
-    const g = ev.target.closest && ev.target.closest('[data-node]');
-    if (!g) return;
-    const id = g.dataset.node;
-    setFocus(state.focus === id ? null : id);
+  // 図タブは web/diagram.js に切り出してある。共有物は ctx として明示的に渡す
+  const diagram = initDiagram({
+    byId, chain, childrenOf, diagramViewEl, esc, model,
+    persistHidden, render, renderSide, rpcCallers, rpcImpls,
+    setFocus, state, subtreeLoc, tarjan,
   });
-  diagramViewEl.addEventListener('mouseover', (ev) => {
-    const g = ev.target.closest && ev.target.closest('[data-node]');
-    const svgEl = diagramViewEl.querySelector('#dg-svg');
-    if (!svgEl) return;
-    if (!g) {
-      svgEl.classList.remove('hovering');
-      return;
-    }
-    const id = g.dataset.node;
-    svgEl.classList.add('hovering');
-    const related = new Set([id]);
-    for (const el of svgEl.querySelectorAll('.dg-edge, .dg-elabel')) {
-      const hit = el.dataset.from === id || el.dataset.to === id;
-      el.classList.toggle('rel', hit);
-      if (hit) {
-        related.add(el.dataset.from);
-        related.add(el.dataset.to);
-      }
-    }
-    for (const el of svgEl.querySelectorAll('.dg-node')) {
-      el.classList.toggle('rel', related.has(el.dataset.node));
-    }
-  });
-  diagramViewEl.addEventListener('mouseleave', () => {
-    const svgEl = diagramViewEl.querySelector('#dg-svg');
-    if (svgEl) svgEl.classList.remove('hovering');
-  });
+  const renderDiagram = () => diagram.renderDiagram();
+
   $('#tab-diagram').addEventListener('click', () => setTab('diagram'));
 
   // ---------- エントリーポイントタブ ----------
@@ -2980,6 +2993,12 @@
         '<div class="diffwrap"><div class="sub">エクスポートされた HTML では差分比較は使えません(git が必要です)</div></div>';
       return;
     }
+    if (diffState.refs === null && diffState.error === '') {
+      // ref 一覧の取得中。git のブランチ数が多いと待たされる
+      diffViewEl.innerHTML =
+        `<div class="diffwrap"><h2>差分</h2>${loadingHtml('ブランチ・タグの一覧を読み込んでいます…')}</div>`;
+      return;
+    }
     if (diffState.refs && diffState.refs.git === false) {
       diffViewEl.innerHTML =
         '<div class="diffwrap"><div class="sub">このプロジェクトは git リポジトリではないため、差分比較は使えません</div></div>';
@@ -2996,7 +3015,9 @@
       `<button id="diff-run"${diffState.busy ? ' disabled' : ''} title="2 つの ref を解析して差分を出す(数秒かかります)">${diffState.busy ? '解析中…' : '比較する'}</button>` +
       `</div>` +
       (diffState.error ? `<div class="sub derr">${esc(diffState.error)}</div>` : '') +
-      diffResultHtml() +
+      (diffState.busy
+        ? loadingHtml('2 つの ref を解析しています… 大きなリポジトリでは数秒かかります')
+        : diffResultHtml()) +
       `</div>`;
   }
 
@@ -3557,6 +3578,15 @@
     render();
   });
   sideEl.addEventListener('click', (ev) => {
+    const apiPick = ev.target.closest('[data-dgapi]');
+    if (apiPick) {
+      ev.stopPropagation();
+      const id = apiPick.dataset.dgapi;
+      state.dgApi = state.dgApi === id ? null : id; // 同じものを押したら解除
+      renderDiagram();
+      renderSide();
+      return;
+    }
     const bmRemove = ev.target.closest('[data-bm-remove]');
     if (bmRemove) {
       ev.stopPropagation();

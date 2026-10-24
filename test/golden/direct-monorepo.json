@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 4,
+  "name": "direct-monorepo",
+  "nodes": [
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/inventory.proto",
+      "label": "inventory.proto",
+      "parent": "proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 11,
+      "meta": {
+        "pkg": "inventory.v1",
+        "services": [
+          "InventoryService"
+        ],
+        "goPackage": "example.com/mono/proto",
+        "messages": {
+          "ReserveRequest": 9,
+          "ReserveResponse": 10
+        },
+        "file": "proto/inventory.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/inventory.proto#InventoryService.Reserve",
+      "label": "InventoryService.Reserve",
+      "parent": "proto/inventory.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/inventory.proto",
+        "line": 6,
+        "req": "ReserveRequest",
+        "res": "ReserveResponse"
+      }
+    },
+    {
+      "id": "service",
+      "label": "service",
+      "parent": "svc:inventory",
+      "kind": "module",
+      "lang": "go",
+      "loc": 18,
+      "meta": {
+        "typeDefs": {
+          "server": {
+            "f": "service/server.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "service#server.Reserve",
+      "label": "server.Reserve",
+      "parent": "service",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "service/server.go",
+        "line": 15,
+        "doc": "Reserve は在庫を確保する。"
+      }
+    },
+    {
+      "id": "svc:inventory",
+      "label": "inventory",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "proto/inventory.proto#InventoryService.Reserve",
+      "to": "service#server.Reserve",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "service",
+      "to": "proto/inventory.proto",
+      "count": 1,
+      "kind": "proto"
+    }
+  ],
+  "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 6,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 1,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

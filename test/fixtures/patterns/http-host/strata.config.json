@@ -1,0 +1,4 @@
+{
+  "name": "http-host",
+  "http": { "internalHosts": ["internal.example.com"] }
+}

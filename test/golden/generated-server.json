@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 4,
+  "name": "generated-server",
+  "nodes": [
+    {
+      "id": "artifact:client-lib/foo/v1",
+      "label": "v1",
+      "parent": "client-lib/foo",
+      "kind": "artifact",
+      "meta": {
+        "file": "client-lib/foo/v1/foo_grpc.pb.go",
+        "line": 1,
+        "pkg": "acme.foo.v1",
+        "services": [
+          "BarService",
+          "FooService"
+        ]
+      }
+    },
+    {
+      "id": "client-lib",
+      "label": "client-lib",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "client-lib/foo",
+      "label": "foo",
+      "parent": "client-lib",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs",
+      "label": "proto-defs",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs/foo",
+      "label": "foo",
+      "parent": "proto-defs",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs/foo/v1",
+      "label": "v1",
+      "parent": "proto-defs/foo",
+      "kind": "dir"
+    },
+    {
+      "id": "proto-defs/foo/v1/foo.proto",
+      "label": "foo.proto",
+      "parent": "proto-defs/foo/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 18,
+      "meta": {
+        "pkg": "acme.foo.v1",
+        "services": [
+          "FooService",
+          "BarService"
+        ],
+        "messages": {
+          "GetFooReq": 8,
+          "GetFooRes": 9,
+          "PingReq": 16,
+          "PingRes": 17
+        },
+        "file": "proto-defs/foo/v1/foo.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto-defs/foo/v1/foo.proto#BarService.Ping",
+      "label": "BarService.Ping",
+      "parent": "proto-defs/foo/v1/foo.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto-defs/foo/v1/foo.proto",
+        "line": 13,
+        "req": "PingReq",
+        "res": "PingRes"
+      }
+    },
+    {
+      "id": "proto-defs/foo/v1/foo.proto#FooService.GetFoo",
+      "label": "FooService.GetFoo",
+      "parent": "proto-defs/foo/v1/foo.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto-defs/foo/v1/foo.proto",
+        "line": 5,
+        "req": "GetFooReq",
+        "res": "GetFooRes"
+      }
+    },
+    {
+      "id": "svc-a",
+      "label": "svc-a",
+      "kind": "dir",
+      "lang": "go"
+    },
+    {
+      "id": "svc-a/src",
+      "label": "svc-a",
+      "parent": "svc-a",
+      "kind": "module",
+      "lang": "go",
+      "loc": 23,
+      "meta": {
+        "typeDefs": {
+          "FooServer": {
+            "f": "svc-a/src/server.go",
+            "l": 11
+          }
+        }
+      }
+    },
+    {
+      "id": "svc-a/src#FooServer.GetFoo",
+      "label": "FooServer.GetFoo",
+      "parent": "svc-a/src",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "svc-a/src/server.go",
+        "line": 16
+      }
+    },
+    {
+      "id": "svc-a/src#FooServer.Ping",
+      "label": "FooServer.Ping",
+      "parent": "svc-a/src",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "svc-a/src/server.go",
+        "line": 20
+      }
+    },
+    {
+      "id": "svc-b",
+      "label": "svc-b",
+      "kind": "module",
+      "lang": "go",
+      "loc": 21,
+      "meta": {
+        "typeDefs": {
+          "Client": {
+            "f": "svc-b/client.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "svc-b#Client.Fetch",
+      "label": "Client.Fetch",
+      "parent": "svc-b",
+      "kind": "func",
+      "lang": "go",
+      "loc": 7,
+      "meta": {
+        "file": "svc-b/client.go",
+        "line": 14
+      }
+    },
+    {
+      "id": "svc-c",
+      "label": "svc-c",
+      "kind": "module",
+      "lang": "go",
+      "loc": 17,
+      "meta": {
+        "typeDefs": {
+          "AltFooServer": {
+            "f": "svc-c/server.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "svc-c#AltFooServer.GetFoo",
+      "label": "AltFooServer.GetFoo",
+      "parent": "svc-c",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "svc-c/server.go",
+        "line": 14
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "proto-defs/foo/v1/foo.proto",
+      "to": "artifact:client-lib/foo/v1",
+      "count": 1,
+      "kind": "generates"
+    },
+    {
+      "from": "proto-defs/foo/v1/foo.proto#BarService.Ping",
+      "to": "svc-a/src#FooServer.Ping",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "proto-defs/foo/v1/foo.proto#FooService.GetFoo",
+      "to": "svc-a/src#FooServer.GetFoo",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "proto-defs/foo/v1/foo.proto#FooService.GetFoo",
+      "to": "svc-c#AltFooServer.GetFoo",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "svc-b",
+      "to": "proto-defs/foo/v1/foo.proto#FooService.GetFoo",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "svc-b/client.go",
+          "l": 15
+        }
+      ],
+      "evidence": "exact",
+      "via": [
+        "artifact:client-lib/foo/v1"
+      ]
+    },
+    {
+      "from": "svc-b#Client.Fetch",
+      "to": "proto-defs/foo/v1/foo.proto#FooService.GetFoo",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "svc-b/client.go",
+          "l": 15
+        }
+      ],
+      "evidence": "exact",
+      "via": [
+        "artifact:client-lib/foo/v1"
+      ]
+    }
+  ],
+  "warnings": [
+    "生成クライアント(生成物)を 1 個検出しました(署名で同定)",
+    "生成クライアントへの import 1 件は Go のパッケージとしては解決できませんでしたが、間接層が呼び出し先の RPC を解決しています(警告ではありません)",
+    "生成クライアント経由の構成で、サーバ実装を 3 件 RPC に接続しました(Unimplemented<Service>Server の埋め込みを証拠に同定)",
+    "間接層を越えた RPC 呼び出しを 1 件接続しました"
+  ],
+  "coverage": {
+    "files": {
+      "read": 17,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 1
+    },
+    "rpcCalls": {
+      "evidence": 1,
+      "resolvedByIndirection": 1,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

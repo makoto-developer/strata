@@ -1,0 +1,21 @@
+openapi: 3.0.3
+info:
+  title: User API
+  version: 1.2.0
+servers:
+  - url: https://user-api/v1
+paths:
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: ユーザーを取得する
+    delete:
+      operationId: deleteUser
+      deprecated: true
+  /health:
+    get:
+      operationId: health
+  /users:
+    post:
+      operationId: createUser
+      summary: ユーザーを作る

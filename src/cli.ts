@@ -29,9 +29,12 @@ const HELP = `Strata — 多言語・マイクロサービス対応の依存関�
                 [--sarif] [-o file.sarif]  SARIF 2.1.0 で出力(GitHub Code Scanning 連携)
   strata report [dir|model.json] [-o report.md] アーキテクチャレポート(mermaid + Markdown)を出力
   strata metrics [dir|model.json] [--json]  サービス結合度(Ca/Ce/不安定度)を算出
+  strata unresolved [dir|model.json] [--json] 解決できなかった参照を一覧(間接層の設定を書く手掛かり)
   strata diff   <old> <new> [--json]        2 モデルを比較(依存増減・新規/解消の循環)
                 [dir] --ref <base>..<head>  2 つの git ref を直接比較(head 省略で作業ツリー)
   strata trace  [dir|model.json] <関数名/ID> [--up] [--depth N] コールツリーを表示
+  strata doctor [dir|model.json]           解析台帳(どこまで見えているか)を表示
+  strata explain [dir|model.json] <名前/ID>  その線をなぜ引いたか(根拠・確信度・該当行)を表示
   strata init   [dir] [--force]            strata.config.json の雛形を作成
   strata --version                         バージョンを表示(不具合報告時に添えてください)
 
@@ -69,6 +72,26 @@ function parseArgs(argv: string[]): Args {
     }
   }
   return args;
+}
+
+/** 根拠の強さの説明。弱いものほど、鵜呑みにしてはいけない。 */
+const EVIDENCE_LABEL: Record<string, string> = {
+  exact: '完全修飾名の一致(生成物を特定したうえで) — 強い',
+  configured: '設定で明示された対応',
+  structural: '構造的な証拠(解決済み import / 生成コードの埋め込み / 登録)',
+  name: '名前が一致しただけ — 弱い(別 package の同名 API の可能性)',
+};
+
+/** 「見えなかったと分かっている量」を 1 行で。率は構成で分母が変わるので出さない。 */
+function coverageLine(model: Graph): string {
+  const c = model.coverage;
+  if (!c) return '';
+  const gaps = c.files.failed + c.imports.unresolved + c.rpcCalls.unresolved + c.ambiguous;
+  return (
+    `解析台帳: ファイル ${c.files.read}(読めず ${c.files.failed}) / ` +
+    `未解決 import ${c.imports.unresolved} / 未解決 RPC ${c.rpcCalls.unresolved} / 曖昧でスキップ ${c.ambiguous}` +
+    (gaps > 0 ? ` — 見えなかったと分かっている箇所 ${gaps} 件(strata doctor で内訳)` : '')
+  );
 }
 
 function loadModel(input: string | undefined, ref?: string): Graph {
@@ -109,6 +132,43 @@ function printCycles(model: Graph, asJson: boolean): number {
   return 1;
 }
 
+// 未解決の理由 → 利用者向けの説明。model.ts の UnresolvedReason と 1 対 1 で対応させる
+const UNRESOLVED_LABEL: Record<string, string> = {
+  artifact: '生成物から proto 定義を逆引きできなかった',
+  env: '環境変数の値が IaC から解決できなかった',
+  dynamic: 'トピック名が動的生成されている',
+};
+
+/** 未解決参照の一覧。設定を書けば繋がるものを利用者が見つけられるようにする。 */
+function printUnresolved(model: Graph, asJson: boolean): void {
+  const list = model.unresolved ?? [];
+  if (asJson) {
+    console.log(JSON.stringify({ unresolved: list }, null, 2));
+    return;
+  }
+  if (list.length === 0) {
+    console.log('✓ 未解決の参照はありません');
+    return;
+  }
+  console.log(`未解決の参照: ${list.length} 件\n`);
+  const byReason = new Map<string, typeof list>();
+  for (const u of list) {
+    const bucket = byReason.get(u.reason) ?? [];
+    bucket.push(u);
+    byReason.set(u.reason, bucket);
+  }
+  for (const [reason, items] of byReason) {
+    console.log(`[${UNRESOLVED_LABEL[reason] ?? reason}] ${items.length} 件`);
+    for (const u of items) {
+      const where = u.file ? `${u.file}${u.line ? ':' + u.line : ''}` : u.from;
+      console.log(`  ${u.detail}  (${where})`);
+      if (u.hint) console.log(`    → ${u.hint}`);
+    }
+    console.log('');
+  }
+  console.log('繋げたいものが残っている場合は strata.config.json の indirection / infra を設定してください。');
+}
+
 function printViolations(model: Graph, violations: RuleViolation[]): void {
   console.error(`✖ アーキテクチャルール違反: ${violations.length} 件`);
   const byRule = new Map<string, RuleViolation[]>();
@@ -136,6 +196,17 @@ function checkThresholds(model: Graph): string[] {
   if (typeof th.maxCycles === 'number') {
     const n = findCycles(model).length;
     if (n > th.maxCycles) out.push(`循環グループ ${n} > 上限 ${th.maxCycles}`);
+  }
+  const cov = model.coverage;
+  if (cov) {
+    // 「違反が無い」と「見えていないから出ない」は違う。解析の健全性も CI で見張る
+    const unresolved = cov.imports.unresolved + cov.rpcCalls.unresolved;
+    if (typeof th.maxUnresolved === 'number' && unresolved > th.maxUnresolved)
+      out.push(`未解決の参照 ${unresolved} > 上限 ${th.maxUnresolved}(strata doctor で内訳)`);
+    if (typeof th.maxAmbiguous === 'number' && cov.ambiguous > th.maxAmbiguous)
+      out.push(`曖昧で繋がなかった箇所 ${cov.ambiguous} > 上限 ${th.maxAmbiguous}`);
+    if (th.failOnReadError === true && cov.files.failed > 0)
+      out.push(`読めなかったファイル ${cov.files.failed} 件(解析が欠けています)`);
   }
   if (typeof th.maxInstability === 'number' || typeof th.maxEfferent === 'number') {
     for (const m of computeServiceMetrics(model)) {
@@ -246,6 +317,80 @@ function main(): void {
   }
 
   switch (command) {
+    case 'explain': {
+      const model = loadModel(args.positional[0], refOf(args));
+      const q = (args.positional[1] ?? args.positional[0] ?? '').toLowerCase();
+      if (q === '') {
+        console.error('対象を指定してください: strata explain [dir] <RPC 名や ID の一部>');
+        process.exitCode = 1;
+        break;
+      }
+      const byId = new Map(model.nodes.map((n) => [n.id, n]));
+      const label = (id: string): string => byId.get(id)?.label ?? id;
+      const hit = (id: string): boolean => id.toLowerCase().includes(q) || label(id).toLowerCase().includes(q);
+      const targets = model.nodes.filter((n) => hit(n.id));
+      if (targets.length === 0) {
+        console.error(`「${q}」に一致するノードがありません`);
+        process.exitCode = 1;
+        break;
+      }
+      for (const n of targets.slice(0, 5)) {
+        console.log(`\n${n.kind} ${n.label}`);
+        console.log(`  ${n.id}`);
+        const shown = model.edges.filter((e) => e.from === n.id || e.to === n.id);
+        if (shown.length === 0) {
+          console.log('  この解析では、繋がっている線がありません');
+          continue;
+        }
+        for (const e of shown.slice(0, 40)) {
+          const dir = e.from === n.id ? '→' : '←';
+          const other = e.from === n.id ? e.to : e.from;
+          const why = e.evidence ? EVIDENCE_LABEL[e.evidence] : '構文そのもの(import / 呼び出し)';
+          const sites = (e.sites ?? []).map((s) => `${s.f}:${s.l}`).join(', ');
+          console.log(`  ${dir} ${e.kind.padEnd(9)} ${label(other)}`);
+          console.log(`      根拠: ${why}${e.violates ? ` / 禁止依存 [${e.violates}]` : ''}`);
+          if (sites) console.log(`      該当行: ${sites}`);
+          if (e.via && e.via.length > 0) console.log(`      経由: ${e.via.map(label).join(' → ')}`);
+        }
+        if (shown.length > 40) console.log(`  …他 ${shown.length - 40} 本`);
+      }
+      if (targets.length > 5) console.log(`\n…他 ${targets.length - 5} 個のノードが一致しました(絞り込んでください)`);
+      break;
+    }
+    case 'doctor': {
+      const model = loadModel(args.positional[0], refOf(args));
+      const c = model.coverage;
+      if (!c) {
+        console.error('このモデルには解析台帳がありません(古い model.json です)。scan し直してください');
+        process.exitCode = 1;
+        break;
+      }
+      const off = Object.entries(c.analyzers)
+        .filter(([, on]) => !on)
+        .map(([k]) => k);
+      console.log(`解析台帳: ${model.name}`);
+      console.log(`  ノード ${model.nodes.length} / エッジ ${model.edges.length}`);
+      console.log(`  読めたファイル ${c.files.read}  読めなかった ${c.files.failed}`);
+      console.log(
+        `  内部 import: 解決 ${c.imports.resolved} / 未解決 ${c.imports.unresolved}` +
+          (c.imports.viaArtifact > 0 ? ` / 生成物として説明済み ${c.imports.viaArtifact}` : ''),
+      );
+      console.log(
+        `  RPC 呼び出しの証拠 ${c.rpcCalls.evidence}(間接層で解決 ${c.rpcCalls.resolvedByIndirection} / 未解決 ${c.rpcCalls.unresolved})`,
+      );
+      console.log(`  候補が複数で繋がなかった箇所 ${c.ambiguous}`);
+      if (off.length > 0) {
+        console.log(`  無効なアナライザ: ${off.join(', ')} — この種の依存は最初から出ません`);
+      }
+      const gaps = c.files.failed + c.imports.unresolved + c.rpcCalls.unresolved + c.ambiguous;
+      console.log('');
+      console.log(
+        gaps === 0
+          ? '見えなかったと分かっている箇所はありません。ただし静的解析には原理的に届かない範囲(動的なパス組み立て・リフレクション・実行時のルーティング)があります。'
+          : `見えなかったと分かっている箇所: ${gaps} 件。この分だけ絵は不完全です。`,
+      );
+      break;
+    }
     case 'scan': {
       const ref = refOf(args);
       const target = args.positional[0] ?? '.';
@@ -258,6 +403,7 @@ function main(): void {
           `モデルを書き出しました: ${out} (ノード ${model.nodes.length} / エッジ ${model.edges.length})`,
         );
         if (model.warnings.length > 0) console.error(`警告 ${model.warnings.length} 件(モデル内 warnings 参照)`);
+        console.error(coverageLine(model));
       } else {
         console.log(json);
       }
@@ -312,7 +458,7 @@ function main(): void {
     }
     case 'check': {
       const model = loadModel(args.positional[0], refOf(args));
-      const violations = checkRules(model, model.rules);
+      const violations = checkRules(model, model.rules, model.thresholds?.ruleMinEvidence);
       // SARIF 出力(GitHub Code Scanning 連携)。テキスト出力の代わりに構造化して出す
       if (args.options.has('sarif')) {
         const cycles = findCycles(model);
@@ -427,6 +573,11 @@ function main(): void {
       console.log('I が低い(安定)ほど多くに依存され、変更時の影響範囲が広い。');
       break;
     }
+    case 'unresolved': {
+      const model = loadModel(args.positional[0], refOf(args));
+      printUnresolved(model, args.options.has('json'));
+      break;
+    }
     case 'report': {
       const model = loadModel(args.positional[0], refOf(args));
       const md = buildReport(model);
@@ -481,16 +632,14 @@ function main(): void {
   }
 }
 
-// Node 22.18 未満は TypeScript の type stripping が未対応で、実行前に不明瞭な
-// パースエラーになる。起動時に確認して親切なメッセージを出す。
+// 保証する範囲は engines のとおり ^24.12 || >=26 だが、ここで弾くのは 24 未満だけ。
+// 24.0〜24.11 と 25 系は保証外でも動くので、動くものを拒否しない。
 function checkNodeVersion(): void {
-  const m = /^v?(\d+)\.(\d+)/.exec(process.versions.node);
+  const m = /^v?(\d+)/.exec(process.versions.node);
   if (!m) return;
-  const major = Number(m[1]);
-  const minor = Number(m[2]);
-  if (major < 22 || (major === 22 && minor < 18)) {
+  if (Number(m[1]) < 24) {
     console.error(
-      `Strata は Node.js 22.18 以上が必要です(現在 ${process.versions.node})。\n` +
+      `Strata は Node.js 24.12 以上が必要です(現在 ${process.versions.node})。\n` +
         `TypeScript を直接実行するため、より新しい Node を利用してください。`,
     );
     process.exit(1);
