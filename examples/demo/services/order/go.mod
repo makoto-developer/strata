@@ -1,3 +1,3 @@
 module example.com/platform/services/order
 
-go 1.22
+go 1.27
