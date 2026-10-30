@@ -3,7 +3,7 @@
 //
 // 使い方(Strata 本体はゼロ依存なので、録画ツールは都度インストールする):
 //   npm install --no-save playwright && npx playwright install chromium
-//   node src/cli.ts serve examples/demo --port 7455 &   # サーバを起動
+//   STRATA_CONFIG_DIR=$(mktemp -d) node src/cli.ts serve examples/demo --port 7455 &   # サーバを起動
 //   node scripts/record-demo.mjs http://127.0.0.1:7455/ scripts/.rec
 //   # 出力された .webm を ffmpeg で GIF 化(README 用)
 //
@@ -11,8 +11,12 @@
 
 import { chromium } from 'playwright';
 import * as fs from 'node:fs';
+import { assertDemoWorkspace } from './demo-guard.mjs';
 
 const url = process.argv[2] || 'http://127.0.0.1:7333/';
+
+// 実環境を指したまま撮ると、公開画像にサービス名やパスが写り込む
+await assertDemoWorkspace(url);
 const outDir = process.argv[3] || 'scripts/.rec';
 fs.mkdirSync(outDir, { recursive: true });
 

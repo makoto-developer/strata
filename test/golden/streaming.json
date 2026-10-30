@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 4,
+  "name": "streaming",
+  "nodes": [
+    {
+      "id": "app",
+      "label": "streamapp",
+      "parent": "svc:app",
+      "kind": "module",
+      "lang": "go",
+      "loc": 35,
+      "meta": {
+        "typeDefs": {
+          "App": {
+            "f": "app/app.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "app#App.Sync",
+      "label": "App.Sync",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 7,
+      "meta": {
+        "file": "app/app.go",
+        "line": 28,
+        "doc": "Sync は双方向でやり取りする。"
+      }
+    },
+    {
+      "id": "app#App.Watch",
+      "label": "App.Watch",
+      "parent": "app",
+      "kind": "func",
+      "lang": "go",
+      "loc": 11,
+      "meta": {
+        "file": "app/app.go",
+        "line": 15,
+        "doc": "Watch は配信を購読する(サーバストリーミング)。"
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/feed.proto",
+      "label": "feed.proto",
+      "parent": "proto",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 12,
+      "meta": {
+        "pkg": "acme.feed.v1",
+        "services": [
+          "FeedService"
+        ],
+        "goPackage": "example.com/acme/proto/feed",
+        "messages": {
+          "WatchRequest": 10,
+          "Event": 11
+        },
+        "file": "proto/feed.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/feed.proto#FeedService.Sync",
+      "label": "FeedService.Sync",
+      "parent": "proto/feed.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/feed.proto",
+        "line": 7,
+        "req": "Event",
+        "res": "Event",
+        "streaming": "bidi"
+      }
+    },
+    {
+      "id": "proto/feed.proto#FeedService.Watch",
+      "label": "FeedService.Watch",
+      "parent": "proto/feed.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/feed.proto",
+        "line": 6,
+        "req": "WatchRequest",
+        "res": "Event",
+        "streaming": "server"
+      }
+    },
+    {
+      "id": "svc:app",
+      "label": "app",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "proto/feed.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "app",
+      "to": "proto/feed.proto#FeedService.Sync",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 29
+        }
+      ],
+      "evidence": "structural"
+    },
+    {
+      "from": "app",
+      "to": "proto/feed.proto#FeedService.Watch",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 16
+        }
+      ],
+      "evidence": "structural"
+    },
+    {
+      "from": "app#App.Sync",
+      "to": "proto/feed.proto#FeedService.Sync",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 29
+        }
+      ],
+      "evidence": "structural"
+    },
+    {
+      "from": "app#App.Watch",
+      "to": "proto/feed.proto#FeedService.Watch",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "app/app.go",
+          "l": 16
+        }
+      ],
+      "evidence": "structural"
+    },
+    {
+      "from": "proto/feed.proto#FeedService.Sync",
+      "to": "app#App.Sync",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "name"
+    },
+    {
+      "from": "proto/feed.proto#FeedService.Watch",
+      "to": "app#App.Watch",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "name"
+    }
+  ],
+  "warnings": [
+    "間接層を越えた RPC 呼び出しを 2 件接続しました"
+  ],
+  "coverage": {
+    "files": {
+      "read": 6,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 1,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 2,
+      "resolvedByIndirection": 2,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": true,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

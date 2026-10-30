@@ -11,7 +11,7 @@ import { exportHtml } from '../src/export.ts';
 import { parseBlamePorcelain, detectPrNumber } from '../src/server.ts';
 import { leadingComment, stripSource } from '../src/lex.ts';
 import { parseGraph } from '../src/model.ts';
-import { checkRules } from '../src/rules.ts';
+import { checkRules, markViolations } from '../src/rules.ts';
 import { buildSarif } from '../src/sarif.ts';
 import { scanAtRef, splitRefRange } from '../src/gitref.ts';
 import { computeServiceMetrics } from '../src/metrics.ts';
@@ -271,6 +271,28 @@ try {
   else fail('逆方向を誤検出した');
   if (checkRules(g, []).length === 0 && checkRules(g, undefined).length === 0) ok('rules: ルールなしなら違反ゼロ');
   else fail('ルールなしで違反が出た');
+
+  // 図の色付けは、ビューアで照合し直さずエッジに付いた印を読む(CLI と食い違わせない)
+  const marked = { ...g, edges: g.edges.map((e) => ({ ...e })) };
+  const n = markViolations(marked, rules);
+  if (n === 1 && marked.edges[0].violates === 'domain-no-infra') ok('rules: 違反したエッジに印が付く(図の色付け用)');
+  else fail('violates の印が想定外: ' + JSON.stringify(marked.edges));
+  const clean = { ...g, edges: g.edges.map((e) => ({ ...e })) };
+  if (markViolations(clean, []) === 0 && clean.edges[0].violates === undefined) ok('rules: ルールなしでは印を付けない');
+  else fail('ルールなしで印が付いた');
+
+  // 同じ端点に種類の違うエッジがあるとき、重複判定で片方を落とさない
+  const g3 = {
+    ...g,
+    edges: [
+      { from: 'app/domain', to: 'app/infra', count: 1, kind: 'import' },
+      { from: 'app/domain', to: 'app/infra', count: 1, kind: 'call' },
+    ],
+  };
+  const kinds = checkRules(g3, rules).map((v) => v.kind).sort();
+  if (kinds.length === 2 && kinds[0] === 'call' && kinds[1] === 'import')
+    ok('rules: 同じ端点でも種類が違えば別の違反として数える');
+  else fail('kind 違いの違反を取りこぼした: ' + JSON.stringify(kinds));
 }
 
 // 設定サーフェス: Go/JS/Elixir の環境変数読み取りを検出
@@ -814,6 +836,112 @@ try {
   }
 }
 
+// モデルをディスク経由で読んでもフィールドが落ちない
+// (parseGraph が列挙したものだけ返していて、後から足した coverage が黙って消えた)
+{
+  const model = scan(demoDir);
+  const back = parseGraph(JSON.stringify(model), '(test)');
+  const lost = Object.keys(model).filter((k) => back[k] === undefined);
+  if (lost.length === 0) ok('モデル: JSON を経由してもフィールドが落ちない');
+  else fail('往復で消えたフィールド: ' + lost.join(', '));
+  if (back.coverage && back.coverage.files.read === model.coverage.files.read)
+    ok('モデル: 解析台帳が往復しても保たれる');
+  else fail('coverage が往復で壊れた');
+}
+
+// 名前が一致しただけの線は弱い根拠として印を付け、ルール判定から外せる
+{
+  const model = scan(demoDir);
+  const weak = model.edges.filter((e) => e.evidence === 'name');
+  if (weak.length > 0) ok(`根拠: 名前一致だけの線を name として印を付ける(${weak.length} 本)`);
+  else fail('弱い根拠の線が 1 本も印されていない');
+  const unmarked = model.edges.filter((e) => (e.kind === 'rpc' || e.kind === 'impl') && !e.evidence);
+  if (unmarked.length === 0) ok('根拠: rpc / impl の線はすべて分類されている');
+  else fail('未分類の線がある: ' + JSON.stringify(unmarked.slice(0, 3).map((e) => `${e.kind} ${e.from}`)));
+
+  // ルール判定の下限を上げると、弱い線は違反にしない
+  const rules = [{ name: 'no-proto', from: '**/gateway', to: '**/proto' }];
+  const all = checkRules(model, rules).length;
+  const strong = checkRules(model, rules, 'structural').length;
+  if (all > strong) ok(`根拠: ruleMinEvidence で弱い線をルール判定から外せる(${all} → ${strong})`);
+  else fail(`ruleMinEvidence が効いていない(${all} → ${strong})`);
+}
+
+// 1 つの RPC に実装が複数あるとき、依存を 1 つの実装に決め打ちしない
+{
+  const model = scan(fileURLToPath(new URL('./fixtures/patterns/generated-server', import.meta.url)));
+  const impls = model.edges.filter((e) => e.kind === 'impl' && e.from.endsWith('FooService.GetFoo'));
+  const m = computeServiceMetrics(model);
+  const by = (id) => m.find((x) => x.id === id);
+  if (impls.length === 2 && by('svc-a') && by('svc-c') && by('svc-a').ca === 1 && by('svc-c').ca === 1)
+    ok('metrics: 実装が複数ある RPC は、依存を全実装に帰属させる');
+  else
+    fail(
+      '複数実装の帰属が想定外: impl=' +
+        impls.length +
+        ' svc-a=' +
+        JSON.stringify(by('svc-a')?.ca) +
+        ' svc-c=' +
+        JSON.stringify(by('svc-c')?.ca),
+    );
+}
+
+// モデルのキャッシュ: 指紋が一致するときだけ使い回す
+{
+  const prevCfg = process.env.STRATA_CONFIG_DIR;
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-cache-'));
+  process.env.STRATA_CONFIG_DIR = cfg;
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'strata-cache-ws-'));
+  fs.writeFileSync(path.join(ws, 'go.mod'), 'module example.com/x\n\ngo 1.22\n');
+  fs.writeFileSync(path.join(ws, 'main.go'), 'package main\n\nfunc main() {}\n');
+  try {
+    // import は動的にする(環境変数を差し替えてから読ませるため)
+    const { fingerprint, sameFingerprint, readCache, writeCache, clearCache } = await import(
+      '../src/modelcache.ts?cache-test'
+    );
+    const fp1 = fingerprint(ws);
+    const model = scan(ws);
+    if (readCache(ws, fp1) === null) ok('キャッシュ: 保存前は空');
+    else fail('保存していないのにキャッシュが返った');
+
+    writeCache(ws, fp1, model);
+    const hit = readCache(ws, fp1);
+    if (hit && hit.nodes.length === model.nodes.length) ok('キャッシュ: 指紋が一致すれば読み戻せる');
+    else fail('キャッシュを読み戻せない');
+
+    // 中身を変えたら指紋が変わり、古いキャッシュは使われない
+    fs.writeFileSync(path.join(ws, 'main.go'), 'package main\n\nfunc main() { helper() }\nfunc helper() {}\n');
+    const fp2 = fingerprint(ws);
+    if (!sameFingerprint(fp1, fp2)) ok('キャッシュ: ファイルを変えると指紋が変わる');
+    else fail('ファイルを変えても指紋が同じ(古い結果を返してしまう)');
+    if (readCache(ws, fp2) === null) ok('キャッシュ: 指紋が違えば使わない');
+    else fail('指紋が違うのにキャッシュを返した');
+
+    clearCache(ws);
+    if (readCache(ws, fp1) === null) ok('キャッシュ: 明示的に捨てられる');
+    else fail('clearCache が効いていない');
+
+    // strata 自身の解析コードを直したら作り直す。版番号だけだと開発中は変わらず、
+    // 古い結果を返し続ける(実際にそれで取りこぼしを起こした)
+    const own = fileURLToPath(new URL('../src/scan.ts', import.meta.url));
+    const before = fs.statSync(own);
+    try {
+      const later = new Date(before.mtimeMs + 60_000);
+      fs.utimesSync(own, later, later);
+      const { fingerprint: freshFp } = await import('../src/modelcache.ts?tool-changed');
+      if (!sameFingerprint(fp2, freshFp(ws))) ok('キャッシュ: 解析コードを直すと指紋が変わる');
+      else fail('解析コードを直しても指紋が同じ(古い結果を返してしまう)');
+    } finally {
+      fs.utimesSync(own, before.atime, before.mtime); // リポジトリの状態を戻す
+    }
+  } finally {
+    if (prevCfg === undefined) delete process.env.STRATA_CONFIG_DIR;
+    else process.env.STRATA_CONFIG_DIR = prevCfg;
+    fs.rmSync(cfg, { recursive: true, force: true });
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+}
+
 // 自己完結 HTML(export)の健全性 §8.4
 {
   const html = exportHtml(model);
@@ -823,6 +951,14 @@ try {
 
   if (!html.includes('<script src="app.js">')) ok('export: 元の script 参照が残らない');
   else fail('export に <script src="app.js"> が残っている(置換文字列の $& 展開の疑い)');
+  // 起動オーバーレイはサーバ経由の解析待ち用。JS が動かないと不透明な板だけが残るので入れない
+  if (!html.includes('id="boot"') && html.includes('id="layout"')) ok('export: 起動オーバーレイを含まない');
+  else fail('export に起動オーバーレイが残っている(JS 無効時に画面が覆われる)');
+  // ビューアは view 単位のモジュールに分かれている。1 本にまとめた結果が入っていること
+  const modulesIn = ['diagram.js ----', 'app.js ----'].every((m) => html.includes(m));
+  const leftover = /^\s*(import|export)\s/m.test(html.replace(/&[a-z]+;/g, ''));
+  if (modulesIn && !leftover) ok('export: ビューアのモジュールを 1 本にまとめて埋め込む');
+  else fail(`export のバンドルが想定外(モジュール=${modulesIn} / import・export の残留=${leftover})`);
 
   // インラインの JSON が元のモデルに戻せるか(< のエスケープが JSON を壊していないか)
   const m = /window\.STRATA_MODEL = ([\s\S]*?);<\/script>/.exec(html);

@@ -1,0 +1,411 @@
+{
+  "schemaVersion": 4,
+  "name": "openapi-spec",
+  "nodes": [
+    {
+      "id": "ext:http:out",
+      "label": "外部への送信(HTTP)",
+      "kind": "service",
+      "lang": "http"
+    },
+    {
+      "id": "ext:http:out:billing",
+      "label": "billing",
+      "parent": "ext:http:out",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "external": true
+      }
+    },
+    {
+      "id": "gateway",
+      "label": "gateway",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "gateway/internal",
+      "label": "internal",
+      "parent": "gateway",
+      "kind": "dir"
+    },
+    {
+      "id": "gateway/internal/client",
+      "label": "client",
+      "parent": "gateway/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 20,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "gateway/internal/client#CreateOnBilling",
+      "label": "CreateOnBilling",
+      "parent": "gateway/internal/client",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "gateway/internal/client/client.go",
+        "line": 17,
+        "doc": "別サービス宛て。パスは user-api の仕様書と同じだが、宛先が違う"
+      }
+    },
+    {
+      "id": "gateway/internal/client#CreateUser",
+      "label": "CreateUser",
+      "parent": "gateway/internal/client",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "gateway/internal/client/client.go",
+        "line": 12
+      }
+    },
+    {
+      "id": "gateway/internal/client#FetchUser",
+      "label": "FetchUser",
+      "parent": "gateway/internal/client",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "gateway/internal/client/client.go",
+        "line": 8
+      }
+    },
+    {
+      "id": "order-api",
+      "label": "order-api",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "order-api/internal",
+      "label": "internal",
+      "parent": "order-api",
+      "kind": "dir"
+    },
+    {
+      "id": "order-api/internal/api",
+      "label": "api",
+      "parent": "order-api/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 12,
+      "meta": {
+        "typeDefs": {
+          "Handler": {
+            "f": "order-api/internal/api/handler.go",
+            "l": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "order-api/internal/api#Handler.Health",
+      "label": "Handler.Health",
+      "parent": "order-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "order-api/internal/api/handler.go",
+        "line": 11
+      }
+    },
+    {
+      "id": "order-api/internal/api#Handler.Register",
+      "label": "Handler.Register",
+      "parent": "order-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "order-api/internal/api/handler.go",
+        "line": 7
+      }
+    },
+    {
+      "id": "route:order-api/internal/api#GET /v1/health",
+      "label": "GET /v1/health",
+      "parent": "order-api/internal/api",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "order-api/internal/api/handler.go",
+        "line": 8,
+        "method": "GET",
+        "path": "/v1/health",
+        "framework": "net/http"
+      }
+    },
+    {
+      "id": "route:user-api/internal/api#ANY /v1/orders",
+      "label": "ANY /v1/orders",
+      "parent": "user-api/internal/api",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "user-api/internal/api/handler.go",
+        "line": 9,
+        "method": "ANY",
+        "path": "/v1/orders",
+        "framework": "net/http"
+      }
+    },
+    {
+      "id": "route:user-api/internal/api#GET /v1/users/{}",
+      "label": "GET /v1/users/{}",
+      "parent": "user-api/internal/api",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "user-api/internal/api/handler.go",
+        "line": 8,
+        "method": "GET",
+        "path": "/v1/users/{}",
+        "framework": "net/http"
+      }
+    },
+    {
+      "id": "user-api",
+      "label": "user-api",
+      "kind": "module",
+      "lang": "go"
+    },
+    {
+      "id": "user-api/api/openapi.yaml",
+      "label": "openapi.yaml",
+      "parent": "user-api",
+      "kind": "file",
+      "lang": "openapi",
+      "meta": {
+        "file": "user-api/api/openapi.yaml",
+        "line": 1,
+        "spec": "openapi",
+        "doc": "User API (1.2.0)"
+      }
+    },
+    {
+      "id": "user-api/api/openapi.yaml#DELETE /v1/users/{}",
+      "label": "DELETE /v1/users/{}",
+      "parent": "user-api/api/openapi.yaml",
+      "kind": "route",
+      "lang": "openapi",
+      "meta": {
+        "file": "user-api/api/openapi.yaml",
+        "line": 1,
+        "method": "DELETE",
+        "path": "/v1/users/{}",
+        "declared": true,
+        "operationId": "deleteUser",
+        "deprecated": true
+      }
+    },
+    {
+      "id": "user-api/api/openapi.yaml#GET /v1/health",
+      "label": "GET /v1/health",
+      "parent": "user-api/api/openapi.yaml",
+      "kind": "route",
+      "lang": "openapi",
+      "meta": {
+        "file": "user-api/api/openapi.yaml",
+        "line": 1,
+        "method": "GET",
+        "path": "/v1/health",
+        "declared": true,
+        "operationId": "health"
+      }
+    },
+    {
+      "id": "user-api/api/openapi.yaml#GET /v1/users/{}",
+      "label": "GET /v1/users/{}",
+      "parent": "user-api/api/openapi.yaml",
+      "kind": "route",
+      "lang": "openapi",
+      "meta": {
+        "file": "user-api/api/openapi.yaml",
+        "line": 1,
+        "method": "GET",
+        "path": "/v1/users/{}",
+        "declared": true,
+        "operationId": "getUser",
+        "doc": "ユーザーを取得する"
+      }
+    },
+    {
+      "id": "user-api/api/openapi.yaml#POST /v1/users",
+      "label": "POST /v1/users",
+      "parent": "user-api/api/openapi.yaml",
+      "kind": "route",
+      "lang": "openapi",
+      "meta": {
+        "file": "user-api/api/openapi.yaml",
+        "line": 1,
+        "method": "POST",
+        "path": "/v1/users",
+        "declared": true,
+        "operationId": "createUser",
+        "doc": "ユーザーを作る"
+      }
+    },
+    {
+      "id": "user-api/internal",
+      "label": "internal",
+      "parent": "user-api",
+      "kind": "dir"
+    },
+    {
+      "id": "user-api/internal/api",
+      "label": "api",
+      "parent": "user-api/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 14,
+      "meta": {
+        "typeDefs": {
+          "Handler": {
+            "f": "user-api/internal/api/handler.go",
+            "l": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "user-api/internal/api#Handler.GetUser",
+      "label": "Handler.GetUser",
+      "parent": "user-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "user-api/internal/api/handler.go",
+        "line": 12
+      }
+    },
+    {
+      "id": "user-api/internal/api#Handler.ListOrders",
+      "label": "Handler.ListOrders",
+      "parent": "user-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "user-api/internal/api/handler.go",
+        "line": 13
+      }
+    },
+    {
+      "id": "user-api/internal/api#Handler.Register",
+      "label": "Handler.Register",
+      "parent": "user-api/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "user-api/internal/api/handler.go",
+        "line": 7
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "gateway/internal/client#CreateOnBilling",
+      "to": "ext:http:out:billing",
+      "count": 2,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "gateway/internal/client/client.go",
+          "l": 18
+        }
+      ]
+    },
+    {
+      "from": "gateway/internal/client#CreateUser",
+      "to": "user-api/api/openapi.yaml#POST /v1/users",
+      "count": 2,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "gateway/internal/client/client.go",
+          "l": 13
+        }
+      ],
+      "evidence": "configured"
+    },
+    {
+      "from": "gateway/internal/client#FetchUser",
+      "to": "route:user-api/internal/api#GET /v1/users/{}",
+      "count": 1,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "gateway/internal/client/client.go",
+          "l": 9
+        }
+      ]
+    },
+    {
+      "from": "route:order-api/internal/api#GET /v1/health",
+      "to": "order-api/internal/api#Handler.Health",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "route:user-api/internal/api#ANY /v1/orders",
+      "to": "user-api/internal/api#Handler.ListOrders",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "route:user-api/internal/api#GET /v1/users/{}",
+      "to": "user-api/internal/api#Handler.GetUser",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "user-api/api/openapi.yaml#GET /v1/users/{}",
+      "to": "route:user-api/internal/api#GET /v1/users/{}",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "configured"
+    }
+  ],
+  "warnings": [
+    "実装だけで宣言が見つかりません(OpenAPI): 1 件 — user-api ANY /v1/orders",
+    "宣言だけで実装が見つかりません(OpenAPI): 3 件 — user-api DELETE /v1/users/{}, user-api GET /v1/health, user-api POST /v1/users"
+  ],
+  "coverage": {
+    "files": {
+      "read": 15,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

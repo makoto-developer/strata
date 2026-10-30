@@ -12,6 +12,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 import { diffModels } from './diff.ts';
+import { fingerprint, readCache, sameFingerprint, writeCache, type Fingerprint } from './modelcache.ts';
 import { repoRootOf, scanAtRef } from './gitref.ts';
 import { parseGraph } from './model.ts';
 import type { Graph } from './model.ts';
@@ -39,6 +40,39 @@ export function webDir(): string {
  * 単一実行ファイル(SEA)として配布したときは web/ がディスクに無いため、
  * 実行ファイルへ埋め込んだ資産から読む。開発時・git clone 実行時は web/ から読む。
  */
+/**
+ * ビューアを構成するモジュール。バンドルする順に並べる(相互 import はしない)。
+ * app.js が最後 — 前のモジュールが定義したものを使うため。
+ */
+const VIEWER_MODULES = ['diagram.js', 'app.js'];
+
+/**
+ * ビューアの JS を 1 本にまとめる。
+ *
+ * ソースは view 単位のモジュールに分けてあるが、配る先は
+ * (a) ローカルサーバ (b) 自己完結 HTML の 2 つで、どちらも 1 本のほうが素直
+ * (エクスポート HTML はインライン script なので相対 import を解決できない)。
+ * ブラウザとエクスポートで別経路にすると、片方だけ壊れても気付けないので同じものを配る。
+ *
+ * import / export はソースの読みやすさのために書いてあるだけなので、ここで落とす。
+ */
+export function bundleViewerJs(): string {
+  const strip = (src: string): string =>
+    src
+      .replace(/^import\s[^;]*;[ \t]*$/gm, '') // 行頭の import 文だけを落とす
+      .replace(/^export\s+/gm, '');
+  const parts: string[] = [];
+  for (const name of VIEWER_MODULES) {
+    const buf = readWebAsset(name);
+    if (buf === null) throw new Error(`ビューアの資産が見つかりません: ${name}`);
+    parts.push(`// ---- ${name} ----\n${strip(buf.toString('utf8'))}`);
+  }
+  // 外側を IIFE で包まない。包むと最後の式(app.js の初期化 Promise)が飲まれ、
+  // eval して await する DOM スタブのテストが初期化完了を待てなくなる。
+  // app.js は自前で IIFE に入っており、モジュール側はトップレベル関数を 1 つ置くだけ
+  return `${parts.join('\n')}\n`;
+}
+
 export function readWebAsset(name: string): Buffer | null {
   const sea = seaApi();
   if (sea) {
@@ -269,11 +303,41 @@ export function serve(
     }
   }
 
+  // 解析結果のキャッシュ。ブラウザを開き直すたびに全解析していた
+  // (100 リポジトリで毎回 9 秒)。指紋(パス・サイズ・更新時刻)が同じなら使い回す。
+  // メモリとディスクの 2 段: メモリは同一プロセス内、ディスクは再起動をまたぐ
+  const memCache = new Map<string, { fp: Fingerprint; graph: Graph }>();
+
   const modelFor = (input: string): Graph => {
     if (input.endsWith('.json') && fs.existsSync(input) && fs.statSync(input).isFile()) {
       return parseGraph(fs.readFileSync(input, 'utf8'), input);
     }
-    return opts.ref ? scanAtRef(input, opts.ref) : scan(input);
+    // --ref は作業ツリーではなくその ref を見るので、指紋(作業ツリー)では判定できない
+    if (opts.ref) return scanAtRef(input, opts.ref);
+
+    const abs = path.resolve(input);
+    const fp = fingerprint(abs);
+    const hit = memCache.get(abs);
+    if (hit && sameFingerprint(hit.fp, fp)) return hit.graph;
+    const cached = readCache(abs, fp);
+    if (cached) {
+      memCache.set(abs, { fp, graph: cached });
+      return cached;
+    }
+    const started = Date.now();
+    const graph = scan(input);
+    // 解析中にファイルが変わっていたら、その結果は「どの状態のものか」が言えない
+    if (sameFingerprint(fp, fingerprint(abs))) {
+      memCache.set(abs, { fp, graph });
+      writeCache(abs, fp, graph);
+    } else {
+      memCache.delete(abs);
+      console.log('解析中にファイルが変更されたため、この結果はキャッシュしません');
+    }
+    if (Date.now() - started > 3000) {
+      console.log(`解析に ${((Date.now() - started) / 1000).toFixed(1)} 秒かかりました(次回からはキャッシュを使います)`);
+    }
+    return graph;
   };
 
   /** `?p=` を解決する。登録済みプロジェクト以外は拒否(403 の代わりに null)。 */
@@ -297,7 +361,15 @@ export function serve(
   // 読み取りを許可する「実パスの root 集合」。通常プロジェクトは root 自身の実パス。
   // 複合プロジェクトはワークスペースがシンボリックリンク束なので、登録された各 paths[] の
   // 実パスも許可する(実ファイルは各リポジトリ配下に解決される)。
+  // 許可 root の算出はディレクトリ走査を伴うので短時間キャッシュする。
+  // シンボリックリンクの増減は数秒で追随すればよい(解析側は --watch が拾う)
+  const ALLOWED_ROOTS_TTL_MS = 5000;
+  const allowedRootsCache = new Map<string, { at: number; roots: string[] }>();
+
   const allowedRealRootsFor = (p: string | null, root: string): string[] => {
+    const cacheKey = `${p ?? ''}\u0000${root}`;
+    const cached = allowedRootsCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < ALLOWED_ROOTS_TTL_MS) return cached.roots;
     const roots = new Set<string>();
     const push = (d: string): void => {
       try {
@@ -312,7 +384,40 @@ export function serve(
       if (entry?.composite && Array.isArray(entry.paths)) for (const d of entry.paths) push(d);
     }
     push(root);
-    return [...roots];
+    // 複合プロジェクトとして登録せず、シンボリックリンクを並べたディレクトリを直接 serve する
+    // 使い方も scan は解析できる。許可 root を増やさないと、解析できたファイルが 403 で読めない。
+    // 深い階層のリンクは従来どおり辿らない(リンクを置けるのはワークスペース直下だけ)
+    let rootReal: string;
+    try {
+      rootReal = fs.realpathSync(root);
+    } catch {
+      const bail = [...roots];
+      allowedRootsCache.set(cacheKey, { at: Date.now(), roots: bail });
+      return bail;
+    }
+    try {
+      for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isSymbolicLink()) continue;
+        const child = path.join(root, entry.name);
+        try {
+          if (!fs.statSync(child).isDirectory()) continue;
+          const target = fs.realpathSync(child);
+          // リンク先がファイルシステムのルートやワークスペースの祖先(ホーム等)だと、
+          // 「リポジトリを 1 つ足す」ではなく広大な読み取り権限になる。そこは許可しない。
+          // 悪意あるリポジトリを clone してそのまま serve した場合の被害を抑える
+          if (target === path.parse(target).root) continue;
+          if (rootReal === target || rootReal.startsWith(target + path.sep)) continue;
+          roots.add(target);
+        } catch {
+          /* リンク切れ・読めないリンクは無視 */
+        }
+      }
+    } catch {
+      /* ルートが読めなければ従来どおり root だけ */
+    }
+    const out = [...roots];
+    allowedRootsCache.set(cacheKey, { at: Date.now(), roots: out });
+    return out;
   };
 
   // resolved(root 相対から path.resolve したパス)をシンボリックリンク解決後の実パスで
@@ -703,6 +808,12 @@ export function serve(
         return sendJson(200, { path: rel, content: fs.readFileSync(real, 'utf8') });
       }
       const file = url === '/' ? 'index.html' : url.slice(1);
+      // app.js はモジュールに分かれているので、まとめたものを返す
+      // (エクスポート HTML と同じ 1 本。経路を分けると片方だけ壊れても気付けない)
+      if (file === 'app.js') {
+        res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-store' });
+        return res.end(bundleViewerJs());
+      }
       const body = readWebAsset(file);
       if (body === null) return sendText(404, 'not found');
       const ext = path.extname(file);

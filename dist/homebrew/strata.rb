@@ -1,60 +1,42 @@
 # Homebrew formula for Strata.
 #
-# 更新手順(新しいタグを切ったあと):
-#   1. タグ(例 v0.1.0)を push する → release ワークフローが macOS(arm64)バイナリを添付する
-#   2. 下の version / url / sha256 を更新する
-#        # Apple Silicon 用バイナリ
-#        gh release download vX.Y.Z -p 'strata-macos-arm64.tar.gz.sha256' -O - | awk '{print $1}'
-#        # それ以外のプラットフォーム用ソース
+# 更新手順:
+#   1. タグを切る前に package.json / package-lock.json / src/model.ts の VERSION を
+#      新しい版に揃える(揃えないと brew 上は 0.1.5 なのに strata --version が 0.1.4 を返す。
+#      test/cli.smoke.mjs はこの 3 者の一致は見るが、git タグとの一致までは検査しない)
+#   2. タグ(例 v0.1.5)を push する
+#   3. 下の url / sha256 を更新する(version は URL から読まれるので書かない)
 #        curl -fsSL https://github.com/makoto-developer/strata/archive/refs/tags/vX.Y.Z.tar.gz | shasum -a 256
-#   3. tap 用リポジトリ makoto-developer/homebrew-strata の Formula/strata.rb に反映する
-#   4. 利用者は次で導入:
+#   4. revision 行と、その直前の説明コメントを消す
+#      (消さないと 0.1.5_1 のような版になり、あとで消すと版番号が下がって更新管理が壊れる)
+#   5. tap 用リポジトリ makoto-developer/homebrew-strata の Formula/strata.rb に反映し、
+#      commit して push する(この 2 ファイルは手コピーなので、push まで済ませて初めて配布に載る)
+#   6. 利用者は次で導入:
 #        brew tap makoto-developer/strata
+#        brew trust makoto-developer/strata   # 公式以外の tap は明示的な信頼が要る
 #        brew install strata
 #
-# 既定(Intel Mac / Linux)はソースを配置し、Homebrew の node で実行する
-# (Strata は実行時依存ゼロ・ビルド不要で、TypeScript を type stripping のまま実行する)。
-# Apple Silicon には Node.js を同梱した単一実行ファイルを配る(node の導入が要らない)。
-#
-# 注意: on_linux ブロックには url / sha256 を書けない(brew audit で弾かれる)。
-# また on_* ブロック内で def install を定義するのも規約違反になる。
-# そのため「既定 = ソース、macOS arm64 だけ url を上書き、install は 1 つに集約」という構成にしてある。
+# ソースを配置し、Homebrew の node で実行する。Strata は実行時依存ゼロ・ビルド不要で、
+# TypeScript を type stripping のまま実行するので、OS・CPU を問わずこの一本で足りる。
 class Strata < Formula
   desc "多言語・マイクロサービス対応の依存関係可視化・コールグラフ探索ツール"
   homepage "https://makoto-developer.github.io/strata/"
   url "https://github.com/makoto-developer/strata/archive/refs/tags/v0.1.4.tar.gz"
-  version "0.1.4"
-  sha256 "7cfea0b20a583143fc7e30f88587779fda0a4096794ed1e977edc2d149479546"
+  sha256 "ad0b7ee9d6528f90404c5ce4a77ad5709a05b2bbf84cf0e4f7d5019c4c93b0cf"
   license "AGPL-3.0-only"
+  # 版は据え置きのまま配布形式を SEA バイナリからソースに変えたので、
+  # revision を上げないと既存の導入が brew upgrade で置き換わらない
+  revision 1
 
-  on_macos do
-    on_arm do
-      url "https://github.com/makoto-developer/strata/releases/download/v0.1.4/strata-macos-arm64.tar.gz"
-      sha256 "1e3b7c746fda468fef4bec7ae5fc57026b78a8214c7671fab8e00c9bac0054db"
-    end
-
-    on_intel do
-      depends_on "node"
-    end
-  end
-
-  on_linux do
-    depends_on "node"
-  end
+  depends_on "node"
 
   def install
-    if OS.mac? && Hardware::CPU.arm?
-      # 単一実行ファイル(Node.js 同梱)。第三者ライセンス表記も一緒に配置する
-      bin.install "strata"
-      pkgshare.install "THIRD-PARTY-NOTICES.txt" if File.exist?("THIRD-PARTY-NOTICES.txt")
-    else
-      libexec.install Dir["*"]
-      (bin/"strata").write <<~SH
-        #!/bin/bash
-        exec "#{formula_opt_bin("node")}/node" "#{libexec}/src/cli.ts" "$@"
-      SH
-      chmod 0755, bin/"strata"
-    end
+    libexec.install Dir["*"]
+    (bin/"strata").write <<~SH
+      #!/bin/bash
+      exec "#{formula_opt_bin("node")}/node" "#{libexec}/src/cli.ts" "$@"
+    SH
+    chmod 0755, bin/"strata"
   end
 
   test do

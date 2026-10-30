@@ -7,7 +7,7 @@
     "strata": "./src/cli.ts"
   },
   "engines": {
-    "node": ">=22.18"
+    "node": "^24.12.0 || >=26.0.0"
   },
   "os": [
     "darwin",
@@ -17,13 +17,12 @@
   "scripts": {
     "demo": "node src/cli.ts serve examples/demo",
     "check": "npm run typecheck && npm run lint && npm test && npm run docs:check",
-    "test": "node test/cli.smoke.mjs && node test/viewer.smoke.mjs && node test/source-panel.smoke.mjs && node test/server.smoke.mjs",
+    "test": "node test/cli.smoke.mjs && node test/indirection.smoke.mjs && node test/viewer.smoke.mjs && node test/source-panel.smoke.mjs && node test/server.smoke.mjs && node scripts/golden.mjs",
+    "golden:update": "node scripts/golden.mjs --update",
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/lint.mjs",
     "docs:check": "node scripts/check-docs.mjs",
-    "audit:viewer": "node scripts/audit-viewer.mjs",
-    "build:binary": "node scripts/build-binary.mjs --tar",
-    "build:app": "node scripts/build-binary.mjs && node scripts/build-app.mjs --dmg"
+    "audit:viewer": "node scripts/audit-viewer.mjs"
   },
   "keywords": [
     "dependency-graph",
@@ -79,7 +78,7 @@
   "private": true,
   "license": "AGPL-3.0-only",
   "devDependencies": {
-    "@types/node": "^26.1.1",
-    "typescript": "^5.9.3"
+    "@types/node": "~24.12.0",
+    "typescript": "^7.0.2"
   }
 }

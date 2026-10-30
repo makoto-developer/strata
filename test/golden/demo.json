@@ -1,0 +1,1895 @@
+{
+  "schemaVersion": 4,
+  "name": "demo-platform",
+  "nodes": [
+    {
+      "id": "ext:http:in",
+      "label": "外部からの受信(HTTP)",
+      "kind": "service",
+      "lang": "http"
+    },
+    {
+      "id": "ext:http:in:webhook",
+      "label": "Webhook 送信元",
+      "parent": "ext:http:in",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "external": true,
+        "webhook": true
+      }
+    },
+    {
+      "id": "ext:http:out",
+      "label": "外部への送信(HTTP)",
+      "kind": "service",
+      "lang": "http"
+    },
+    {
+      "id": "ext:http:out:hooks.example-chat.com",
+      "label": "hooks.example-chat.com",
+      "parent": "ext:http:out",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "external": true,
+        "webhook": true
+      }
+    },
+    {
+      "id": "federation",
+      "label": "federation",
+      "parent": "svc:federation",
+      "kind": "module",
+      "lang": "ts"
+    },
+    {
+      "id": "federation/schema.graphql",
+      "label": "schema.graphql",
+      "parent": "federation",
+      "kind": "file",
+      "lang": "graphql",
+      "loc": 20,
+      "meta": {
+        "file": "federation/schema.graphql",
+        "line": 1,
+        "subgraph": "federation",
+        "entities": {
+          "User": "id"
+        }
+      }
+    },
+    {
+      "id": "federation/src",
+      "label": "src",
+      "parent": "federation",
+      "kind": "dir"
+    },
+    {
+      "id": "federation/src/clients",
+      "label": "clients",
+      "parent": "federation/src",
+      "kind": "dir"
+    },
+    {
+      "id": "federation/src/clients/user.ts",
+      "label": "user.ts",
+      "parent": "federation/src/clients",
+      "kind": "file",
+      "lang": "ts",
+      "loc": 6,
+      "meta": {
+        "file": "federation/src/clients/user.ts",
+        "line": 1
+      }
+    },
+    {
+      "id": "federation/src/clients/user.ts#getUserClient",
+      "label": "getUserClient",
+      "parent": "federation/src/clients/user.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 3,
+      "meta": {
+        "file": "federation/src/clients/user.ts",
+        "line": 3
+      }
+    },
+    {
+      "id": "federation/src/lib",
+      "label": "lib",
+      "parent": "federation/src",
+      "kind": "dir"
+    },
+    {
+      "id": "federation/src/lib/format.ts",
+      "label": "format.ts",
+      "parent": "federation/src/lib",
+      "kind": "file",
+      "lang": "ts",
+      "loc": 6,
+      "meta": {
+        "file": "federation/src/lib/format.ts",
+        "line": 1
+      }
+    },
+    {
+      "id": "federation/src/lib/format.ts#formatUser",
+      "label": "formatUser",
+      "parent": "federation/src/lib/format.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 3,
+      "meta": {
+        "file": "federation/src/lib/format.ts",
+        "line": 3
+      }
+    },
+    {
+      "id": "federation/src/lib/page.ts",
+      "label": "page.ts",
+      "parent": "federation/src/lib",
+      "kind": "file",
+      "lang": "ts",
+      "loc": 11,
+      "meta": {
+        "file": "federation/src/lib/page.ts",
+        "line": 1
+      }
+    },
+    {
+      "id": "federation/src/lib/page.ts#header",
+      "label": "header",
+      "parent": "federation/src/lib/page.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 3,
+      "meta": {
+        "file": "federation/src/lib/page.ts",
+        "line": 3
+      }
+    },
+    {
+      "id": "federation/src/lib/page.ts#preview",
+      "label": "preview",
+      "parent": "federation/src/lib/page.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 3,
+      "meta": {
+        "file": "federation/src/lib/page.ts",
+        "line": 8,
+        "doc": "format への逆依存 = 意図的な循環(赤表示のデモ用)"
+      }
+    },
+    {
+      "id": "federation/src/resolvers.ts",
+      "label": "resolvers.ts",
+      "parent": "federation/src",
+      "kind": "file",
+      "lang": "ts",
+      "loc": 13,
+      "meta": {
+        "file": "federation/src/resolvers.ts",
+        "line": 1
+      }
+    },
+    {
+      "id": "federation/src/resolvers.ts#user",
+      "label": "user",
+      "parent": "federation/src/resolvers.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 5,
+      "meta": {
+        "file": "federation/src/resolvers.ts",
+        "line": 6
+      }
+    },
+    {
+      "id": "federation/src/server.ts",
+      "label": "server.ts",
+      "parent": "federation/src",
+      "kind": "file",
+      "lang": "ts",
+      "loc": 8,
+      "meta": {
+        "file": "federation/src/server.ts",
+        "line": 1
+      }
+    },
+    {
+      "id": "federation/src/server.ts#start",
+      "label": "start",
+      "parent": "federation/src/server.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 3,
+      "meta": {
+        "file": "federation/src/server.ts",
+        "line": 3
+      }
+    },
+    {
+      "id": "gateway",
+      "label": "gateway",
+      "parent": "svc:gateway",
+      "kind": "module",
+      "lang": "go",
+      "loc": 10,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "gateway#main",
+      "label": "main",
+      "parent": "gateway",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "gateway/main.go",
+        "line": 7,
+        "entry": "main"
+      }
+    },
+    {
+      "id": "gateway/internal",
+      "label": "internal",
+      "parent": "gateway",
+      "kind": "dir"
+    },
+    {
+      "id": "gateway/internal/client",
+      "label": "client",
+      "parent": "gateway/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 19,
+      "meta": {
+        "typeDefs": {
+          "UserClient": {
+            "f": "gateway/internal/client/user.go",
+            "l": 11
+          }
+        }
+      }
+    },
+    {
+      "id": "gateway/internal/client#UserClient.GetUserByID",
+      "label": "UserClient.GetUserByID",
+      "parent": "gateway/internal/client",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "gateway/internal/client/user.go",
+        "line": 16,
+        "doc": "GetUserByID は RPC と同名だが stub へのフォワードなので実装扱いにならないこと。"
+      }
+    },
+    {
+      "id": "gateway/internal/handler",
+      "label": "handler",
+      "parent": "gateway/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 33,
+      "meta": {
+        "typeDefs": {
+          "Gateway": {
+            "f": "gateway/internal/handler/handler.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "gateway/internal/handler#Gateway.handleOrders",
+      "label": "Gateway.handleOrders",
+      "parent": "gateway/internal/handler",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "gateway/internal/handler/handler.go",
+        "line": 30
+      }
+    },
+    {
+      "id": "gateway/internal/handler#Gateway.handleUser",
+      "label": "Gateway.handleUser",
+      "parent": "gateway/internal/handler",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "gateway/internal/handler/handler.go",
+        "line": 25
+      }
+    },
+    {
+      "id": "gateway/internal/handler#Gateway.route",
+      "label": "Gateway.route",
+      "parent": "gateway/internal/handler",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "gateway/internal/handler/handler.go",
+        "line": 20
+      }
+    },
+    {
+      "id": "gateway/internal/handler#Serve",
+      "label": "Serve",
+      "parent": "gateway/internal/handler",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "gateway/internal/handler/handler.go",
+        "line": 15
+      }
+    },
+    {
+      "id": "gateway/internal/httpapi",
+      "label": "httpapi",
+      "parent": "gateway/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 38,
+      "meta": {
+        "typeDefs": {
+          "Server": {
+            "f": "gateway/internal/httpapi/router.go",
+            "l": 11
+          }
+        }
+      }
+    },
+    {
+      "id": "gateway/internal/httpapi#Routes",
+      "label": "Routes",
+      "parent": "gateway/internal/httpapi",
+      "kind": "func",
+      "lang": "go",
+      "loc": 9,
+      "meta": {
+        "file": "gateway/internal/httpapi/router.go",
+        "line": 13
+      }
+    },
+    {
+      "id": "gateway/internal/httpapi#Server.handleCreateOrder",
+      "label": "Server.handleCreateOrder",
+      "parent": "gateway/internal/httpapi",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "gateway/internal/httpapi/router.go",
+        "line": 28
+      }
+    },
+    {
+      "id": "gateway/internal/httpapi#Server.handleGetUser",
+      "label": "Server.handleGetUser",
+      "parent": "gateway/internal/httpapi",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "gateway/internal/httpapi/router.go",
+        "line": 23
+      }
+    },
+    {
+      "id": "gateway/internal/httpapi#Server.handlePaymentWebhook",
+      "label": "Server.handlePaymentWebhook",
+      "parent": "gateway/internal/httpapi",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "gateway/internal/httpapi/router.go",
+        "line": 34,
+        "doc": "handlePaymentWebhook は決済プロバイダからの通知を受ける(外部 → 自システムの入口)。"
+      }
+    },
+    {
+      "id": "gql:federation/schema.graphql#Mutation.createOrder",
+      "label": "Mutation.createOrder",
+      "parent": "federation/schema.graphql",
+      "kind": "gqlfield",
+      "lang": "graphql",
+      "meta": {
+        "file": "federation/schema.graphql",
+        "line": 7,
+        "gqlKind": "mutation",
+        "gqlType": "Order!"
+      }
+    },
+    {
+      "id": "gql:federation/schema.graphql#Query.orders",
+      "label": "Query.orders",
+      "parent": "federation/schema.graphql",
+      "kind": "gqlfield",
+      "lang": "graphql",
+      "meta": {
+        "file": "federation/schema.graphql",
+        "line": 4,
+        "gqlKind": "query",
+        "gqlType": "[Order!]!"
+      }
+    },
+    {
+      "id": "gql:federation/schema.graphql#Query.user",
+      "label": "Query.user",
+      "parent": "federation/schema.graphql",
+      "kind": "gqlfield",
+      "lang": "graphql",
+      "meta": {
+        "file": "federation/schema.graphql",
+        "line": 2,
+        "gqlKind": "query",
+        "gqlType": "User"
+      }
+    },
+    {
+      "id": "proto",
+      "label": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/order",
+      "label": "order",
+      "parent": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/order/v1",
+      "label": "v1",
+      "parent": "proto/order",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/order/v1/order.proto",
+      "label": "order.proto",
+      "parent": "proto/order/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 25,
+      "meta": {
+        "pkg": "order.v1",
+        "services": [
+          "OrderService"
+        ],
+        "goPackage": "example.com/platform/proto/order/v1",
+        "messages": {
+          "ListOrdersRequest": 13,
+          "Order": 17,
+          "ListOrdersReply": 22
+        },
+        "file": "proto/order/v1/order.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/order/v1/order.proto#OrderService.ListOrders",
+      "label": "OrderService.ListOrders",
+      "parent": "proto/order/v1/order.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/order/v1/order.proto",
+        "line": 10,
+        "req": "ListOrdersRequest",
+        "res": "ListOrdersReply"
+      }
+    },
+    {
+      "id": "proto/user",
+      "label": "user",
+      "parent": "proto",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v1",
+      "label": "v1",
+      "parent": "proto/user",
+      "kind": "dir"
+    },
+    {
+      "id": "proto/user/v1/user.proto",
+      "label": "user.proto",
+      "parent": "proto/user/v1",
+      "kind": "proto",
+      "lang": "proto",
+      "loc": 32,
+      "meta": {
+        "pkg": "user.v1",
+        "services": [
+          "UserService"
+        ],
+        "goPackage": "example.com/platform/proto/user/v1",
+        "messages": {
+          "GetUserRequest": 19,
+          "GetUserReply": 23,
+          "ListUsersRequest": 27,
+          "ListUsersReply": 29
+        },
+        "file": "proto/user/v1/user.proto",
+        "line": 1
+      }
+    },
+    {
+      "id": "proto/user/v1/user.proto#UserService.GetUser",
+      "label": "UserService.GetUser",
+      "parent": "proto/user/v1/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v1/user.proto",
+        "line": 9,
+        "req": "GetUserRequest",
+        "res": "GetUserReply",
+        "doc": "ユーザーを ID で 1 件取得する"
+      }
+    },
+    {
+      "id": "proto/user/v1/user.proto#UserService.GetUserByID",
+      "label": "UserService.GetUserByID",
+      "parent": "proto/user/v1/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v1/user.proto",
+        "line": 16,
+        "req": "GetUserRequest",
+        "res": "GetUserReply",
+        "doc": "頭字語入りの RPC 名(snake_case 変換の突き合わせテスト用)"
+      }
+    },
+    {
+      "id": "proto/user/v1/user.proto#UserService.LegacyGetUser",
+      "label": "UserService.LegacyGetUser",
+      "parent": "proto/user/v1/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v1/user.proto",
+        "line": 12,
+        "req": "GetUserRequest",
+        "res": "GetUserReply",
+        "deprecated": true
+      }
+    },
+    {
+      "id": "proto/user/v1/user.proto#UserService.ListUsers",
+      "label": "UserService.ListUsers",
+      "parent": "proto/user/v1/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v1/user.proto",
+        "line": 10,
+        "req": "ListUsersRequest",
+        "res": "ListUsersReply",
+        "testCallers": 1,
+        "testFiles": [
+          "services/user/internal/handler/handler_test.go"
+        ]
+      }
+    },
+    {
+      "id": "proto/user/v1/user.proto#UserService.WatchUsers",
+      "label": "UserService.WatchUsers",
+      "parent": "proto/user/v1/user.proto",
+      "kind": "rpc",
+      "lang": "proto",
+      "meta": {
+        "file": "proto/user/v1/user.proto",
+        "line": 11,
+        "req": "ListUsersRequest",
+        "res": "GetUserReply",
+        "streaming": "server"
+      }
+    },
+    {
+      "id": "route:gateway/internal/httpapi#GET /api/users/{}",
+      "label": "GET /api/users/{}",
+      "parent": "gateway/internal/httpapi",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "gateway/internal/httpapi/router.go",
+        "line": 17,
+        "method": "GET",
+        "path": "/api/users/{}",
+        "framework": "chi"
+      }
+    },
+    {
+      "id": "route:gateway/internal/httpapi#POST /api/orders",
+      "label": "POST /api/orders",
+      "parent": "gateway/internal/httpapi",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "gateway/internal/httpapi/router.go",
+        "line": 18,
+        "method": "POST",
+        "path": "/api/orders",
+        "framework": "chi"
+      }
+    },
+    {
+      "id": "route:gateway/internal/httpapi#POST /webhooks/payment",
+      "label": "POST /webhooks/payment",
+      "parent": "gateway/internal/httpapi",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "gateway/internal/httpapi/router.go",
+        "line": 19,
+        "method": "POST",
+        "path": "/webhooks/payment",
+        "framework": "chi",
+        "webhook": true
+      }
+    },
+    {
+      "id": "services/order",
+      "label": "order",
+      "parent": "svc:order-service",
+      "kind": "module",
+      "lang": "go",
+      "loc": 10,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/order#main",
+      "label": "main",
+      "parent": "services/order",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/order/main.go",
+        "line": 7,
+        "entry": "main"
+      }
+    },
+    {
+      "id": "services/order/internal",
+      "label": "internal",
+      "parent": "services/order",
+      "kind": "dir"
+    },
+    {
+      "id": "services/order/internal/api",
+      "label": "api",
+      "parent": "services/order/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 27,
+      "meta": {
+        "typeDefs": {
+          "Server": {
+            "f": "services/order/internal/api/api.go",
+            "l": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "services/order/internal/api#Serve",
+      "label": "Serve",
+      "parent": "services/order/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "services/order/internal/api/api.go",
+        "line": 14
+      }
+    },
+    {
+      "id": "services/order/internal/api#Server.ListOrders",
+      "label": "Server.ListOrders",
+      "parent": "services/order/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "services/order/internal/api/api.go",
+        "line": 23
+      }
+    },
+    {
+      "id": "services/order/internal/api#Server.warmup",
+      "label": "Server.warmup",
+      "parent": "services/order/internal/api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/order/internal/api/api.go",
+        "line": 19
+      }
+    },
+    {
+      "id": "services/order/internal/notify",
+      "label": "notify",
+      "parent": "services/order/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 31,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/order/internal/notify#FetchUser",
+      "label": "FetchUser",
+      "parent": "services/order/internal/notify",
+      "kind": "func",
+      "lang": "go",
+      "loc": 8,
+      "meta": {
+        "file": "services/order/internal/notify/notify.go",
+        "line": 23,
+        "doc": "FetchUser は gateway の REST エンドポイントを叩く(サービス間 HTTP 呼び出し)。"
+      }
+    },
+    {
+      "id": "services/order/internal/notify#NotifySlack",
+      "label": "NotifySlack",
+      "parent": "services/order/internal/notify",
+      "kind": "func",
+      "lang": "go",
+      "loc": 9,
+      "meta": {
+        "file": "services/order/internal/notify/notify.go",
+        "line": 12,
+        "doc": "NotifySlack は外部 SaaS への webhook 送信(自システム → 外部の出口)。"
+      }
+    },
+    {
+      "id": "services/order/schema.graphql",
+      "label": "schema.graphql",
+      "parent": "services/order",
+      "kind": "file",
+      "lang": "graphql",
+      "loc": 11,
+      "meta": {
+        "file": "services/order/schema.graphql",
+        "line": 1,
+        "subgraph": "order-service",
+        "entities": {
+          "Order": "id",
+          "User": "id"
+        }
+      }
+    },
+    {
+      "id": "services/user",
+      "label": "user",
+      "parent": "svc:user-service",
+      "kind": "module",
+      "lang": "go",
+      "loc": 10,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/user#main",
+      "label": "main",
+      "parent": "services/user",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/user/main.go",
+        "line": 7,
+        "entry": "main"
+      }
+    },
+    {
+      "id": "services/user/internal",
+      "label": "internal",
+      "parent": "services/user",
+      "kind": "dir"
+    },
+    {
+      "id": "services/user/internal/handler",
+      "label": "handler",
+      "parent": "services/user/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 29,
+      "meta": {
+        "typeDefs": {
+          "Server": {
+            "f": "services/user/internal/handler/handler.go",
+            "l": 11
+          }
+        }
+      }
+    },
+    {
+      "id": "services/user/internal/handler#Register",
+      "label": "Register",
+      "parent": "services/user/internal/handler",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/user/internal/handler/handler.go",
+        "line": 13
+      }
+    },
+    {
+      "id": "services/user/internal/handler#Server.GetUser",
+      "label": "Server.GetUser",
+      "parent": "services/user/internal/handler",
+      "kind": "func",
+      "lang": "go",
+      "loc": 5,
+      "meta": {
+        "file": "services/user/internal/handler/handler.go",
+        "line": 18,
+        "doc": "GetUser はストアからユーザーを引いて返す gRPC ハンドラ。"
+      }
+    },
+    {
+      "id": "services/user/internal/handler#Server.ListUsers",
+      "label": "Server.ListUsers",
+      "parent": "services/user/internal/handler",
+      "kind": "func",
+      "lang": "go",
+      "loc": 5,
+      "meta": {
+        "file": "services/user/internal/handler/handler.go",
+        "line": 24
+      }
+    },
+    {
+      "id": "services/user/internal/metrics",
+      "label": "metrics",
+      "parent": "services/user/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 19,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/user/internal/metrics#Count",
+      "label": "Count",
+      "parent": "services/user/internal/metrics",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "services/user/internal/metrics/metrics.go",
+        "line": 10,
+        "doc": "Count は計測イベントを記録する。"
+      }
+    },
+    {
+      "id": "services/user/internal/metrics#Snapshot",
+      "label": "Snapshot",
+      "parent": "services/user/internal/metrics",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/user/internal/metrics/metrics.go",
+        "line": 16,
+        "doc": "Snapshot は保存件数も含めた統計を返す(store への逆依存 = 意図的な循環)。"
+      }
+    },
+    {
+      "id": "services/user/internal/store",
+      "label": "store",
+      "parent": "services/user/internal",
+      "kind": "package",
+      "lang": "go",
+      "loc": 16,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/user/internal/store#Get",
+      "label": "Get",
+      "parent": "services/user/internal/store",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "services/user/internal/store/store.go",
+        "line": 7
+      }
+    },
+    {
+      "id": "services/user/internal/store#List",
+      "label": "List",
+      "parent": "services/user/internal/store",
+      "kind": "func",
+      "lang": "go",
+      "loc": 4,
+      "meta": {
+        "file": "services/user/internal/store/store.go",
+        "line": 12
+      }
+    },
+    {
+      "id": "services/user/testsupport",
+      "label": "testsupport",
+      "parent": "services/user",
+      "kind": "package",
+      "lang": "go",
+      "loc": 9,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "services/user/testsupport#StartFakeServer",
+      "label": "StartFakeServer",
+      "parent": "services/user/testsupport",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "services/user/testsupport/support.go",
+        "line": 6,
+        "doc": "StartFakeServer はテスト用のインメモリサーバを起動する。"
+      }
+    },
+    {
+      "id": "svc:federation",
+      "label": "federation",
+      "kind": "service"
+    },
+    {
+      "id": "svc:gateway",
+      "label": "gateway",
+      "kind": "service"
+    },
+    {
+      "id": "svc:order-service",
+      "label": "order-service",
+      "kind": "service"
+    },
+    {
+      "id": "svc:user-service",
+      "label": "user-service",
+      "kind": "service"
+    },
+    {
+      "id": "svc:webapp",
+      "label": "webapp",
+      "kind": "service",
+      "meta": {
+        "envVars": [
+          "API_BASE"
+        ]
+      }
+    },
+    {
+      "id": "web",
+      "label": "web",
+      "kind": "dir"
+    },
+    {
+      "id": "web/portal.ex",
+      "label": "portal.ex",
+      "parent": "web",
+      "kind": "file",
+      "lang": "ex",
+      "loc": 14,
+      "meta": {
+        "file": "web/portal.ex",
+        "line": 1
+      }
+    },
+    {
+      "id": "web/portal.ex#load_user",
+      "label": "load_user",
+      "parent": "web/portal.ex",
+      "kind": "func",
+      "lang": "ex",
+      "meta": {
+        "file": "web/portal.ex",
+        "line": 10,
+        "doc": "ポータル画面の初期表示でユーザーを読み込む"
+      }
+    },
+    {
+      "id": "webapp",
+      "label": "webapp",
+      "parent": "svc:webapp",
+      "kind": "module",
+      "lang": "ts"
+    },
+    {
+      "id": "webapp/src",
+      "label": "src",
+      "parent": "webapp",
+      "kind": "dir"
+    },
+    {
+      "id": "webapp/src/gqlclient.ts",
+      "label": "gqlclient.ts",
+      "parent": "webapp/src",
+      "kind": "file",
+      "lang": "ts",
+      "loc": 5,
+      "meta": {
+        "file": "webapp/src/gqlclient.ts",
+        "line": 1
+      }
+    },
+    {
+      "id": "webapp/src/gqlclient.ts#gql",
+      "label": "gql",
+      "parent": "webapp/src/gqlclient.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 3,
+      "meta": {
+        "file": "webapp/src/gqlclient.ts",
+        "line": 2,
+        "doc": "GraphQL ドキュメントを組み立てる最小のタグ関数(デモ用)。"
+      }
+    },
+    {
+      "id": "webapp/src/orders-page.ts",
+      "label": "orders-page.ts",
+      "parent": "webapp/src",
+      "kind": "file",
+      "lang": "ts",
+      "loc": 52,
+      "meta": {
+        "file": "webapp/src/orders-page.ts",
+        "line": 1
+      }
+    },
+    {
+      "id": "webapp/src/orders-page.ts#fetchUserProfile",
+      "label": "fetchUserProfile",
+      "parent": "webapp/src/orders-page.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 4,
+      "meta": {
+        "file": "webapp/src/orders-page.ts",
+        "line": 34,
+        "doc": "ユーザー情報は gateway の REST から取る。"
+      }
+    },
+    {
+      "id": "webapp/src/orders-page.ts#loadUser",
+      "label": "loadUser",
+      "parent": "webapp/src/orders-page.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 3,
+      "meta": {
+        "file": "webapp/src/orders-page.ts",
+        "line": 22
+      }
+    },
+    {
+      "id": "webapp/src/orders-page.ts#placeOrder",
+      "label": "placeOrder",
+      "parent": "webapp/src/orders-page.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 3,
+      "meta": {
+        "file": "webapp/src/orders-page.ts",
+        "line": 26
+      }
+    },
+    {
+      "id": "webapp/src/orders-page.ts#reorder",
+      "label": "reorder",
+      "parent": "webapp/src/orders-page.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 7,
+      "meta": {
+        "file": "webapp/src/orders-page.ts",
+        "line": 40,
+        "doc": "REST 側(gateway の /api/orders)も併用する。"
+      }
+    },
+    {
+      "id": "webapp/src/orders-page.ts#request",
+      "label": "request",
+      "parent": "webapp/src/orders-page.ts",
+      "kind": "func",
+      "lang": "ts",
+      "loc": 4,
+      "meta": {
+        "file": "webapp/src/orders-page.ts",
+        "line": 48
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "ext:http:in:webhook",
+      "to": "route:gateway/internal/httpapi#POST /webhooks/payment",
+      "count": 1,
+      "kind": "http"
+    },
+    {
+      "from": "federation/src/clients/user.ts",
+      "to": "federation/src/clients/user.ts#getUserClient",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/clients/user.ts",
+          "l": 3
+        }
+      ]
+    },
+    {
+      "from": "federation/src/clients/user.ts",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "federation/src/clients/user.ts#getUserClient",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/clients/user.ts",
+          "l": 4
+        }
+      ]
+    },
+    {
+      "from": "federation/src/lib/format.ts",
+      "to": "federation/src/lib/format.ts#formatUser",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/lib/format.ts",
+          "l": 3
+        }
+      ]
+    },
+    {
+      "from": "federation/src/lib/format.ts",
+      "to": "federation/src/lib/page.ts",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "federation/src/lib/format.ts#formatUser",
+      "to": "federation/src/lib/page.ts#header",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/lib/format.ts",
+          "l": 4
+        }
+      ]
+    },
+    {
+      "from": "federation/src/lib/page.ts",
+      "to": "federation/src/lib/format.ts",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "federation/src/lib/page.ts",
+      "to": "federation/src/lib/page.ts#header",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/lib/page.ts",
+          "l": 3
+        }
+      ]
+    },
+    {
+      "from": "federation/src/lib/page.ts",
+      "to": "federation/src/lib/page.ts#preview",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/lib/page.ts",
+          "l": 8
+        }
+      ]
+    },
+    {
+      "from": "federation/src/lib/page.ts#preview",
+      "to": "federation/src/lib/format.ts#formatUser",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/lib/page.ts",
+          "l": 9
+        }
+      ]
+    },
+    {
+      "from": "federation/src/resolvers.ts",
+      "to": "federation/src/clients/user.ts",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "federation/src/resolvers.ts",
+      "to": "federation/src/lib/format.ts",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "federation/src/resolvers.ts#user",
+      "to": "federation/src/clients/user.ts#getUserClient",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/resolvers.ts",
+          "l": 7
+        }
+      ]
+    },
+    {
+      "from": "federation/src/resolvers.ts#user",
+      "to": "federation/src/lib/format.ts#formatUser",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/resolvers.ts",
+          "l": 9
+        }
+      ]
+    },
+    {
+      "from": "federation/src/resolvers.ts#user",
+      "to": "proto/user/v1/user.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "federation/src/resolvers.ts",
+          "l": 8
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "federation/src/server.ts",
+      "to": "federation/src/resolvers.ts",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "federation/src/server.ts",
+      "to": "federation/src/server.ts#start",
+      "count": 2,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "federation/src/server.ts",
+          "l": 3
+        },
+        {
+          "f": "federation/src/server.ts",
+          "l": 7
+        }
+      ]
+    },
+    {
+      "from": "gateway",
+      "to": "gateway/internal/handler",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "gateway#main",
+      "to": "gateway/internal/handler#Serve",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "gateway/main.go",
+          "l": 8
+        }
+      ]
+    },
+    {
+      "from": "gateway/internal/client",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "gateway/internal/client#UserClient.GetUserByID",
+      "to": "proto/user/v1/user.proto#UserService.GetUserByID",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "gateway/internal/client/user.go",
+          "l": 17
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "gateway/internal/handler",
+      "to": "proto/order/v1/order.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "gateway/internal/handler",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "gateway/internal/handler#Gateway.handleOrders",
+      "to": "proto/order/v1/order.proto#OrderService.ListOrders",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "gateway/internal/handler/handler.go",
+          "l": 31
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "gateway/internal/handler#Gateway.handleUser",
+      "to": "proto/user/v1/user.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "gateway/internal/handler/handler.go",
+          "l": 27
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "gateway/internal/handler#Gateway.route",
+      "to": "gateway/internal/handler#Gateway.handleOrders",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "gateway/internal/handler/handler.go",
+          "l": 22
+        }
+      ]
+    },
+    {
+      "from": "gateway/internal/handler#Gateway.route",
+      "to": "gateway/internal/handler#Gateway.handleUser",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "gateway/internal/handler/handler.go",
+          "l": 21
+        }
+      ]
+    },
+    {
+      "from": "gateway/internal/handler#Serve",
+      "to": "gateway/internal/handler#Gateway.route",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "gateway/internal/handler/handler.go",
+          "l": 17
+        }
+      ]
+    },
+    {
+      "from": "gql:federation/schema.graphql#Query.user",
+      "to": "federation/src/resolvers.ts#user",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "proto/order/v1/order.proto",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "proto/order/v1/order.proto#OrderService.ListOrders",
+      "to": "services/order/internal/api#Server.ListOrders",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "name"
+    },
+    {
+      "from": "proto/user/v1/user.proto#UserService.GetUser",
+      "to": "services/user/internal/handler#Server.GetUser",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "name"
+    },
+    {
+      "from": "proto/user/v1/user.proto#UserService.ListUsers",
+      "to": "services/user/internal/handler#Server.ListUsers",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "name"
+    },
+    {
+      "from": "route:gateway/internal/httpapi#GET /api/users/{}",
+      "to": "gateway/internal/httpapi#Server.handleGetUser",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "route:gateway/internal/httpapi#POST /api/orders",
+      "to": "gateway/internal/httpapi#Server.handleCreateOrder",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "route:gateway/internal/httpapi#POST /webhooks/payment",
+      "to": "gateway/internal/httpapi#Server.handlePaymentWebhook",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    },
+    {
+      "from": "services/order",
+      "to": "services/order/internal/api",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "services/order#main",
+      "to": "services/order/internal/api#Serve",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/order/main.go",
+          "l": 8
+        }
+      ]
+    },
+    {
+      "from": "services/order/internal/api",
+      "to": "proto/order/v1/order.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "services/order/internal/api",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "services/order/internal/api#Serve",
+      "to": "services/order/internal/api#Server.warmup",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/order/internal/api/api.go",
+          "l": 16
+        }
+      ]
+    },
+    {
+      "from": "services/order/internal/api#Server.ListOrders",
+      "to": "proto/user/v1/user.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "services/order/internal/api/api.go",
+          "l": 24
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "services/order/internal/api#Server.warmup",
+      "to": "proto/user/v1/user.proto#UserService.GetUser",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "services/order/internal/api/api.go",
+          "l": 20
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "services/order/internal/notify#FetchUser",
+      "to": "route:gateway/internal/httpapi#GET /api/users/{}",
+      "count": 1,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "services/order/internal/notify/notify.go",
+          "l": 24
+        }
+      ]
+    },
+    {
+      "from": "services/order/internal/notify#NotifySlack",
+      "to": "ext:http:out:hooks.example-chat.com",
+      "count": 1,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "services/order/internal/notify/notify.go",
+          "l": 13
+        }
+      ]
+    },
+    {
+      "from": "services/order/schema.graphql",
+      "to": "federation/schema.graphql",
+      "count": 1,
+      "kind": "graphql"
+    },
+    {
+      "from": "services/user",
+      "to": "services/user/internal/handler",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "services/user#main",
+      "to": "services/user/internal/handler#Register",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/user/main.go",
+          "l": 8
+        }
+      ]
+    },
+    {
+      "from": "services/user/internal/handler",
+      "to": "proto/user/v1/user.proto",
+      "count": 1,
+      "kind": "proto"
+    },
+    {
+      "from": "services/user/internal/handler",
+      "to": "services/user/internal/metrics",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "services/user/internal/handler",
+      "to": "services/user/internal/store",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "services/user/internal/handler#Server.GetUser",
+      "to": "services/user/internal/metrics#Count",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/user/internal/handler/handler.go",
+          "l": 19
+        }
+      ]
+    },
+    {
+      "from": "services/user/internal/handler#Server.GetUser",
+      "to": "services/user/internal/store#Get",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/user/internal/handler/handler.go",
+          "l": 20
+        }
+      ]
+    },
+    {
+      "from": "services/user/internal/handler#Server.ListUsers",
+      "to": "services/user/internal/metrics#Count",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/user/internal/handler/handler.go",
+          "l": 25
+        }
+      ]
+    },
+    {
+      "from": "services/user/internal/handler#Server.ListUsers",
+      "to": "services/user/internal/store#List",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/user/internal/handler/handler.go",
+          "l": 26
+        }
+      ]
+    },
+    {
+      "from": "services/user/internal/metrics",
+      "to": "services/user/internal/store",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "services/user/internal/metrics#Snapshot",
+      "to": "services/user/internal/store#List",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/user/internal/metrics/metrics.go",
+          "l": 17
+        }
+      ]
+    },
+    {
+      "from": "services/user/internal/store",
+      "to": "services/user/internal/metrics",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "services/user/internal/store#Get",
+      "to": "services/user/internal/metrics#Count",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/user/internal/store/store.go",
+          "l": 8
+        }
+      ]
+    },
+    {
+      "from": "services/user/internal/store#List",
+      "to": "services/user/internal/metrics#Count",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "services/user/internal/store/store.go",
+          "l": 13
+        }
+      ]
+    },
+    {
+      "from": "web/portal.ex#load_user",
+      "to": "proto/user/v1/user.proto#UserService.GetUserByID",
+      "count": 1,
+      "kind": "rpc",
+      "sites": [
+        {
+          "f": "web/portal.ex",
+          "l": 11
+        }
+      ],
+      "evidence": "name"
+    },
+    {
+      "from": "webapp/src/gqlclient.ts",
+      "to": "webapp/src/gqlclient.ts#gql",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "webapp/src/gqlclient.ts",
+          "l": 2
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts",
+      "to": "gql:federation/schema.graphql#Mutation.createOrder",
+      "count": 1,
+      "kind": "graphql",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 14
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts",
+      "to": "gql:federation/schema.graphql#Query.user",
+      "count": 1,
+      "kind": "graphql",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 5
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts",
+      "to": "webapp/src/gqlclient.ts",
+      "count": 1,
+      "kind": "import"
+    },
+    {
+      "from": "webapp/src/orders-page.ts",
+      "to": "webapp/src/orders-page.ts#fetchUserProfile",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 34
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts",
+      "to": "webapp/src/orders-page.ts#loadUser",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 22
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts",
+      "to": "webapp/src/orders-page.ts#placeOrder",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 26
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts",
+      "to": "webapp/src/orders-page.ts#reorder",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 40
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts",
+      "to": "webapp/src/orders-page.ts#request",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 48
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts#fetchUserProfile",
+      "to": "route:gateway/internal/httpapi#GET /api/users/{}",
+      "count": 1,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 35
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts#loadUser",
+      "to": "webapp/src/orders-page.ts#request",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 23
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts#placeOrder",
+      "to": "webapp/src/orders-page.ts#request",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 27
+        }
+      ]
+    },
+    {
+      "from": "webapp/src/orders-page.ts#reorder",
+      "to": "route:gateway/internal/httpapi#POST /api/orders",
+      "count": 1,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "webapp/src/orders-page.ts",
+          "l": 41
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 142,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 13,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 5,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

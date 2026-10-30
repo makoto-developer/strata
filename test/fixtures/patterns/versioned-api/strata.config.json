@@ -1,0 +1,1 @@
+{ "name": "versioned-api", "services": [{ "name": "app", "path": "app" }], "indirection": { "enabled": true } }

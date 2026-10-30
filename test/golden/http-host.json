@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 4,
+  "name": "http-host",
+  "nodes": [
+    {
+      "id": "caller",
+      "label": "caller",
+      "kind": "module",
+      "lang": "go",
+      "loc": 21,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "caller#fetchInternal",
+      "label": "fetchInternal",
+      "parent": "caller",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "caller/client.go",
+        "line": 11,
+        "doc": "internalHosts に書いてあるので社内ルートへ繋がってよい"
+      }
+    },
+    {
+      "id": "caller#fetchPartner",
+      "label": "fetchPartner",
+      "parent": "caller",
+      "kind": "func",
+      "lang": "go",
+      "loc": 3,
+      "meta": {
+        "file": "caller/client.go",
+        "line": 16,
+        "doc": "別会社。パスが同じでも社内ルートへ繋いではいけない"
+      }
+    },
+    {
+      "id": "caller#main",
+      "label": "main",
+      "parent": "caller",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "caller/client.go",
+        "line": 20,
+        "entry": "main"
+      }
+    },
+    {
+      "id": "ext:http:out",
+      "label": "外部への送信(HTTP)",
+      "kind": "service",
+      "lang": "http"
+    },
+    {
+      "id": "ext:http:out:partner.example.com",
+      "label": "partner.example.com",
+      "parent": "ext:http:out",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "external": true
+      }
+    },
+    {
+      "id": "internal-api",
+      "label": "internal-api",
+      "kind": "module",
+      "lang": "go",
+      "loc": 17,
+      "meta": {
+        "typeDefs": {}
+      }
+    },
+    {
+      "id": "internal-api#getUser",
+      "label": "getUser",
+      "parent": "internal-api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 1,
+      "meta": {
+        "file": "internal-api/routes.go",
+        "line": 16
+      }
+    },
+    {
+      "id": "internal-api#main",
+      "label": "main",
+      "parent": "internal-api",
+      "kind": "func",
+      "lang": "go",
+      "loc": 5,
+      "meta": {
+        "file": "internal-api/routes.go",
+        "line": 10,
+        "entry": "main"
+      }
+    },
+    {
+      "id": "route:internal-api#GET /users/{}",
+      "label": "GET /users/{}",
+      "parent": "internal-api",
+      "kind": "route",
+      "lang": "http",
+      "meta": {
+        "file": "internal-api/routes.go",
+        "line": 12,
+        "method": "GET",
+        "path": "/users/{}",
+        "framework": "chi"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "caller#fetchInternal",
+      "to": "route:internal-api#GET /users/{}",
+      "count": 1,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "caller/client.go",
+          "l": 12
+        }
+      ]
+    },
+    {
+      "from": "caller#fetchPartner",
+      "to": "ext:http:out:partner.example.com",
+      "count": 1,
+      "kind": "http",
+      "sites": [
+        {
+          "f": "caller/client.go",
+          "l": 17
+        }
+      ]
+    },
+    {
+      "from": "caller#main",
+      "to": "caller#fetchInternal",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "caller/client.go",
+          "l": 20
+        }
+      ]
+    },
+    {
+      "from": "caller#main",
+      "to": "caller#fetchPartner",
+      "count": 1,
+      "kind": "call",
+      "sites": [
+        {
+          "f": "caller/client.go",
+          "l": 20
+        }
+      ]
+    },
+    {
+      "from": "route:internal-api#GET /users/{}",
+      "to": "internal-api#getUser",
+      "count": 1,
+      "kind": "impl",
+      "evidence": "structural"
+    }
+  ],
+  "warnings": [],
+  "coverage": {
+    "files": {
+      "read": 10,
+      "failed": 0
+    },
+    "imports": {
+      "resolved": 0,
+      "unresolved": 0,
+      "viaArtifact": 0
+    },
+    "rpcCalls": {
+      "evidence": 0,
+      "resolvedByIndirection": 0,
+      "unresolved": 0
+    },
+    "ambiguous": 0,
+    "analyzers": {
+      "indirection": false,
+      "infra": false,
+      "http": true,
+      "graphql": true,
+      "messaging": false
+    }
+  }
+}

@@ -4,6 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chainBase, readFileText, type Ctx, type Project } from '../context.ts';
+import { setEvidence } from '../model.ts';
 import { countLines, leadingComment, makeLineFinder, matchBrace, stripSource } from '../lex.ts';
 
 interface JsFunc {
@@ -570,8 +571,10 @@ export function linkJs(ctx: Ctx, state: JsState): void {
       let candidates = infos.filter((info) => fileRefs?.has(info.protoId));
       if (candidates.length === 0) candidates = infos.filter((info) => projectRefs?.has(info.protoId));
       if (candidates.length === 1) {
-        ctx.builder.addEdge(caller, candidates[0].rpcId, 'rpc', 1, siteAt(m.index));
+        // 名前の一致だけ(スタブ import が条件)。弱い根拠
+        setEvidence(ctx.builder.addEdge(caller, candidates[0].rpcId, 'rpc', 1, siteAt(m.index)), 'name');
       } else if (candidates.length > 1) {
+        ctx.stats.ambiguous++;
         ctx.builder.warn(`RPC 名 '${member}' が複数の proto に一致するため接続をスキップ: ${file.wsRel}`);
       }
     }
@@ -611,7 +614,8 @@ export function linkJs(ctx: Ctx, state: JsState): void {
       let candidates = infos.filter((info) => fileRefs?.has(info.protoId));
       if (candidates.length === 0) candidates = infos.filter((info) => projectRefs?.has(info.protoId));
       if (candidates.length === 1) {
-        ctx.builder.addEdge(candidates[0].rpcId, fn.id, 'impl');
+        // クラス名の慣習 + proto 参照。構造ではなく名前の一致
+        setEvidence(ctx.builder.addEdge(candidates[0].rpcId, fn.id, 'impl'), 'name');
       }
     }
   }

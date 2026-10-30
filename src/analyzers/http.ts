@@ -18,6 +18,9 @@
 
 import type { Ctx } from '../context.ts';
 import { makeLineFinder, matchBrace, stripSource } from '../lex.ts';
+import { setEvidence } from '../model.ts';
+import { globToRegex } from '../path-glob.ts';
+import { normalizeName } from './deploy.ts';
 import {
   buildFuncIndex,
   buildShortNameIndex,
@@ -501,7 +504,8 @@ export function detectHttp(ctx: Ctx): void {
       });
       if (narrowed.length === 1) candidates = narrowed;
     }
-    if (candidates.length === 1) ctx.builder.addEdge(id, candidates[0], 'impl');
+    // ルート登録の引数からハンドラを引く。登録という構造的な証拠
+    if (candidates.length === 1) setEvidence(ctx.builder.addEdge(id, candidates[0], 'impl'), 'structural');
   }
 
   // webhook 受信口には外部からの入りを表す辺を張る
@@ -520,6 +524,34 @@ export function detectHttp(ctx: Ctx): void {
     for (const { id } of webhookRoutes) ctx.builder.addEdge(inId, id, 'http');
   }
 
+  // ホスト付きで呼んでいる先を社内ルートに繋いでよいか。
+  //
+  // パスだけで照合すると、別会社の GET /users/{id} が社内の同じパスに化ける
+  // (fmt.Sprintf("https://partner.example.com/users/%s", id) が実際に社内ルートへ繋がった)。
+  // 嘘の社内依存はこのツールでいちばん出してはいけない誤りなので、ホストで切る。
+  //
+  // 既定は「ドットを含まないホストは社内」。gateway:8080 や user-service のような
+  // 1 語のホスト名はクラスタ内のサービス名で、公開ドメインは必ずドットを含む。
+  // api.internal.example.com のような FQDN を社内扱いにしたいときは internalHosts に書く。
+  const internalHostPatterns = (ctx.config.http?.internalHosts ?? []).map((h) => globToRegex(h.toLowerCase()));
+  const isInternalHost = (host: string | undefined): boolean => {
+    if (host === undefined || host === '') return true; // ホストが無い = 相対パス
+    const name = host.toLowerCase().split(':')[0];
+    // デプロイ定義に同じ名前の Service があるなら、ドット付きでもクラスタ内
+    if (ctx.deployHosts.has(normalizeName(name))) return true;
+    if (ctx.deployHosts.has(normalizeName(name.replace(/\.svc\.cluster\.local$/, '')))) return true;
+    if (!name.includes('.')) return true; // クラスタ内のサービス名
+    return internalHostPatterns.some((re) => re.test(name) || re.test(host.toLowerCase()));
+  };
+
+  /** ホスト名がデプロイ定義で特定のサービスを指しているなら、そのノード id。 */
+  const hostService = (host: string | undefined): string | undefined => {
+    if (host === undefined || host === '') return undefined;
+    const name = host.toLowerCase().split(':')[0].replace(/\.svc\.cluster\.local$/, '');
+    const hit = ctx.deployHosts.get(normalizeName(name)) ?? ctx.deployHosts.get(normalizeName(name.split('.')[0]));
+    return hit === undefined || hit === '' ? undefined : hit;
+  };
+
   // クライアント呼び出しの解決
   for (const call of calls) {
     const from = enclosingNodeId(ctx, funcIndex, call.file, call.line);
@@ -527,13 +559,48 @@ export function detectHttp(ctx: Ctx): void {
     const site = { f: call.file, l: call.line };
     const key = call.method ? pathKey(call.method, call.raw) : '';
     const pk = normalizePath(call.raw).toLowerCase();
-    let targets = key ? (byKey.get(key) ?? []) : [];
-    if (targets.length === 0) targets = byPath.get(pk) ?? [];
+    // 社内と明示されていないホストへの呼び出しは、社内ルートの候補に載せない
+    const mayBeInternal = isInternalHost(call.host);
+    let targets = mayBeInternal && key ? (byKey.get(key) ?? []) : [];
+    if (mayBeInternal && targets.length === 0) targets = byPath.get(pk) ?? [];
+    // 宛先がデプロイ定義で決まるなら、パスが同じだけの別サービスを候補から外す。
+    // 同じ /health を持つサービスが並んでいても宛先を取り違えない
+    const destService = hostService(call.host);
+    if (destService !== undefined && targets.length > 0) {
+      const narrowed = targets.filter((id) => topAncestorId(ctx, id) === destService);
+      targets = narrowed; // 名前で宛先が分かっているのに一致しない = そのルートではない
+    }
     if (targets.length === 1) {
       ctx.builder.addEdge(from, targets[0], 'http', 1, site);
       continue;
     }
-    if (targets.length > 1) continue; // 曖昧: 誤接続を避けて張らない
+    if (targets.length > 1) {
+      ctx.stats.ambiguous++; // 曖昧: 誤接続を避けて張らない(取りこぼしとして数える)
+      continue;
+    }
+    // コードに実装が無くても OpenAPI で宣言されていれば、そこへ繋ぐ。
+    // 提供側がワークスペースに無い構成(別リポジトリ・別チーム)でも依存が見える。
+    //
+    // ただし「社内ホスト」は外部でないことしか言っていない。パスが一意なだけで繋ぐと、
+    // http://billing/health の呼び出しが user-api の仕様書に化ける。
+    // ホスト名が宛先サービスと一致するか、ホスト無し(自サービス内の相対パス)のときだけ繋ぐ
+    if (key) {
+      const declared = (ctx.declaredRoutes.get(key) ?? []).filter((id) =>
+        call.host
+          ? destService !== undefined
+            ? topAncestorId(ctx, id) === destService
+            : serviceMatchesHost(ctx, id, call.host)
+          : topAncestorId(ctx, id) === topAncestorId(ctx, from),
+      );
+      if (declared.length === 1) {
+        setEvidence(ctx.builder.addEdge(from, declared[0], 'http', 1, site), 'configured');
+        continue;
+      }
+      if (declared.length > 1) {
+        ctx.stats.ambiguous++;
+        continue;
+      }
+    }
     // どのルートにも当たらない絶対 URL は「外部システム」への送信として残す
     if (call.host && ctx.config.http?.externalHosts !== false) {
       ctx.builder.addNode({ id: EXT_OUT_ID, label: '外部への送信(HTTP)', kind: 'service', lang: 'http' });
@@ -549,4 +616,13 @@ export function detectHttp(ctx: Ctx): void {
       ctx.builder.addEdge(from, extId, 'http', 1, site);
     }
   }
+}
+
+/** 呼び出し先ホスト名が、そのノードの属するサービスを指しているか。 */
+function serviceMatchesHost(ctx: Ctx, nodeId: string, host: string): boolean {
+  const svc = ctx.builder.get(topAncestorId(ctx, nodeId));
+  if (!svc) return false;
+  const norm = (v: string): string => v.toLowerCase().split(':')[0].split('.')[0].replace(/[_-]/g, '');
+  const h = norm(host);
+  return h !== '' && (norm(svc.label) === h || norm(svc.id) === h);
 }

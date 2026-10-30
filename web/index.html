@@ -88,6 +88,9 @@
       title="レイヤー違反(下の層 → 上の層 の上向き依存)の線だけを描画します。行はすべて表示されたままです">⚠ レイヤー違反のみ</button>
   </div>
 </header>
+<!-- 起動時のオーバーレイ。model.json はリクエストのたびに解析するので、
+     大きなワークスペースでは数秒かかる。その間を無言の白画面にしない -->
+<div id="boot" class="loadbox" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>解析しています… 大きなワークスペースでは数秒かかります</div>
 <div id="layout">
   <div id="main">
     <svg id="arcs" xmlns="http://www.w3.org/2000/svg"></svg>

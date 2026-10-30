@@ -1,0 +1,10 @@
+syntax = "proto3";
+package inventory.v1;
+option go_package = "example.com/mono/proto;inventorypb";
+
+service InventoryService {
+  rpc Reserve(ReserveRequest) returns (ReserveResponse);
+}
+
+message ReserveRequest { string sku = 1; }
+message ReserveResponse { bool ok = 1; }

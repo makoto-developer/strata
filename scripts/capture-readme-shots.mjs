@@ -13,8 +13,12 @@ import { chromium } from 'playwright';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertDemoWorkspace } from './demo-guard.mjs';
 
 const url = process.argv[2] || 'http://127.0.0.1:7350/';
+
+// 実環境を指したまま撮ると、公開画像にサービス名やパスが写り込む
+await assertDemoWorkspace(url);
 const outDir = fileURLToPath(new URL('../docs/assets/shots/', import.meta.url));
 fs.mkdirSync(outDir, { recursive: true });
 

@@ -45,7 +45,7 @@ strata check ./my-monorepo   # CI で循環依存・レイヤー違反を検査�
 | --- | --- |
 | どこを通っているか分からない | `⚡RPC → 実装ハンドラ → 関数 → 次のサービス` を**関数レベルで一本のフローとして表示** |
 | 誰が呼んでいるか分からない | proto の RPC 名・HTTP のパス・GraphQL のフィールドで**呼び出し元を逆引き** |
-| 使われていない API が消せない | 呼び出し元ゼロの API に **「未使用?」「テストのみ」バッジ**。棚卸しの根拠になる |
+| 使われていない API が消せない | 本番コードからの呼び出し元を検出できなかった API に **「呼び出し元 未検出」「テストのみ」バッジ**。棚卸しの出発点になる(「未使用」の証明ではありません) |
 | プロトコルの境目で追跡が切れる | gRPC / REST / GraphQL / webhook を**同じグラフに載せる** |
 | アーキテクチャが守れない | 循環依存・レイヤー違反・禁止依存ルールを **CI で検査**(違反で exit 1) |
 
@@ -58,10 +58,10 @@ strata check ./my-monorepo   # CI で循環依存・レイヤー違反を検査�
   (サーバーは `127.0.0.1` にのみバインドします)
 - 📦 **実行時依存ゼロ。** `node_modules` を作りません。サプライチェーンの審査対象が
   「このリポジトリだけ」で済みます
-- ⚡ **速い。** 実測で **1,050 ファイル / 1,644 ノードのモノレポを 0.26 秒**で解析
-  (Apple M シリーズ、キャッシュなし)。待ち時間がないので気軽に何度でも回せます
-- 🪶 **軽い。** 本体のコードは **約 530KB**(`src` + `web`)。
-  バイナリ版は Node.js 同梱で 37MB(圧縮)
+- ⚡ **速い。** 実測で **1,200 ファイル / 6,902 ノードを 0.34 秒**で解析
+  (Apple M シリーズ、キャッシュなし、5 回の中央値)。待ち時間がないので気軽に何度でも回せます
+  <br>測定対象は同梱の生成器で作れます: `node scripts/gen-workspace.mjs /tmp/bench 150`
+- 🪶 **軽い。** 本体のコードは **約 530KB**(`src` + `web`)
 - 🔧 **言語のツールチェーンが要らない。** Go や Python を入れていないマシンでも、
   Go や Python のコードを解析できます(テキスト・構文レベルの解析)
 - 🧱 **ビルド不要。** `git clone` して `node src/cli.ts serve .` で動きます
@@ -104,7 +104,8 @@ strata check ./my-monorepo   # CI で循環依存・レイヤー違反を検査�
 
 gRPC の RPC・HTTP エンドポイント・GraphQL フィールドを 1 つのカタログに。選ぶと
 **呼び出し元(上流)と実装からの下流フロー**が出て、関数をクリックすればソースがその行で開きます。
-「未使用?」「実装なし」「テストのみ」のバッジで、消せる API・未実装の API が一目で分かります。
+「呼び出し元 未検出」「実装なし」「テストのみ」のバッジで、棚卸しの候補と、実装が見つからない API が分かります
+(いずれも「未検出」であって不在の証明ではありません。解析対象外の利用者や動的な呼び出しは見えません)。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/shots/api-dark.png">
@@ -113,12 +114,15 @@ gRPC の RPC・HTTP エンドポイント・GraphQL フィールドを 1 つの�
 
 ### 🧭 図 — 「サービス構成を人に説明したい」
 
-サービス単位の箱と矢印。層ごとの帯、境界の呼び出し数(⚡RPC / ⇄HTTP / ◈GraphQL の内訳)、
-外部システム(破線の箱)まで含めて俯瞰できます。箱をクリックすると依存元・依存先・公開 API が出ます。
+サービス単位の箱と矢印に、境界の呼び出し数(⚡RPC / ⇄HTTP / ◈GraphQL の内訳)と外部システム(破線の箱)まで
+載せて俯瞰できます。箱をクリックすると依存元・依存先・公開 API が出ます。
+帯は「**依存の深さ**」で分けます(そこから下へ伸びる依存チェーンの長さ。0 が土台側で、
+宣言されたアーキテクチャ層ではありません)。
+サービス名の絞り込み・1 ホップ・API のみ・ズームで、大きな構成でも読める範囲に絞れます。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/shots/diagram-dark.png">
-  <img alt="図タブ: サービス単位のアーキテクチャ図とレイヤー帯" src="docs/assets/shots/diagram-light.png">
+  <img alt="図タブ: サービス単位のアーキテクチャ図と、依存の深さごとの帯" src="docs/assets/shots/diagram-light.png">
 </picture>
 
 ### 🚪 エントリーポイント — 「どこから読み始めればいい?」
@@ -188,77 +192,15 @@ Go/Python 等のツールチェーンは**不要**(テキスト・構文レベ�
 
 ## 必要環境
 
-- Node.js **22.18 以上**(TypeScript を直接実行するため。外部依存ゼロ・ビルド不要)
+- Node.js **24.12 以上**(TypeScript を直接実行するため。外部依存ゼロ・ビルド不要)
+  <br>24.12.0 で type stripping が stable になりました。25 系は EOL 済み(2026-06-01)のため対象外です
+  <br>24.0〜24.11 でも起動は拒否しませんが、動作保証の対象は `^24.12.0 || >=26.0.0` です
 - 解析対象のリポジトリ
 
 ## インストール
 
-配布は **GitHub 公開のみ**(npm には公開していません)。
-
-### macOS(Apple Silicon)アプリ — 端末を使わない人はこれ
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/makoto-developer/strata/main/install.sh | bash
-```
-
-これだけで `/Applications/Strata.app` に入ります。あとは Launchpad や Finder から
-**ダブルクリックするだけ**です。インストーラは dmg を取得してチェックサムを照合し、
-配置したうえで隔離属性を外します([中身はこちら](install.sh))。
-
-ダブルクリックすると:
-
-1. 初回はフォルダ選択が出るので、解析したいリポジトリを選ぶ(2 回目以降は前回のフォルダで起動)
-2. ビューアが既定のブラウザで開く
-3. 小さなウィンドウが残るので、終わるときは「終了」を押す(サーバも一緒に止まります)
-
-別のリポジトリに切り替えたいときは、そのウィンドウの「別のフォルダ…」か、
-ビューアの「プロジェクト」タブから追加・切り替えができます。
-
-アプリの中には CLI も同梱しています。端末からも使いたい場合はこれを PATH に置けます:
-
-```sh
-sudo ln -sf /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
-strata --version
-```
-
-<details>
-<summary>dmg を手で入れたい場合(インストーラを使わないとき)</summary>
-
-[最新リリース](https://github.com/makoto-developer/strata/releases/latest)の
-`Strata-macos-arm64.dmg` を開き、`Strata.app` を `Applications` へドラッグしたあと、
-**次の 1 行が必要です**。
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Strata.app
-```
-
-これをしないと「"Strata"は壊れているため開けません。ゴミ箱に入れる必要があります。」と出ます。
-アプリが壊れているわけではなく(署名の検証自体は通ります)、Apple の**公証を受けていない**ためです。
-ダウンロード時に付く隔離属性があると macOS がこう表示します。
-**macOS 15 (Sequoia) 以降では「右クリック → 開く」では回避できません**(Apple が廃止したため)。
-上の 1 行インストーラは、この手順まで済ませます。
-
-</details>
-
-### macOS(Apple Silicon)バイナリ — CLI だけ欲しい人はこれ
-
-Node.js のインストール不要。ランタイム同梱の単一実行ファイルです。
-
-```sh
-curl -fsSL https://github.com/makoto-developer/strata/releases/latest/download/strata-macos-arm64.tar.gz | tar xz
-sudo mv strata /usr/local/bin/
-strata --version
-```
-
-| 項目 | サポート |
-| --- | --- |
-| OS | **macOS 13 Ventura 以降** |
-| CPU | **Apple Silicon(M1 / M2 / M3 / M4 …)**。Intel Mac 用は提供していません |
-| 同梱ランタイム | Node.js v24.18.0 |
-
-ad-hoc 署名のみ(Apple の公証なし)です。ブラウザでダウンロードした場合は
-`xattr -d com.apple.quarantine ./strata` で隔離属性を外してください。
-Intel Mac / Linux / Windows では下記の git clone 版を使ってください(機能は同じです)。
+配布は **GitHub 公開のみ**(npm には公開していません)。ビルド済みバイナリは現在配布していないため、
+いずれもソースから入ります。ビルド不要・実行時依存ゼロなので、`node` さえあれば動きます。
 
 ### Homebrew
 
@@ -273,13 +215,13 @@ strata serve /path/to/your-monorepo
 
 > `brew trust` を省くと `Refusing to load formula from untrusted tap` で止まります。
 > 新しめの Homebrew が、公式以外の tap を既定では読み込まなくなったためです。
-> Apple Silicon では Node.js 同梱のバイナリが、Intel Mac / Linux ではソース + Homebrew の
-> `node` が入ります(いずれも同じ機能です)。
+> ソースから入り、Homebrew の `node` を使います(OS・CPU を問わず同じ構成です)。
 
 ### mise / asdf(Node を用意して git 導入)
 
 ```bash
-mise use -g node@22.18          # asdf の場合: asdf install nodejs 22.18.0
+mise use -g node@24             # asdf: asdf install nodejs latest:24 && asdf set -u nodejs latest:24
+                                # 下限は 24.12。リポジトリ同梱の .mise.toml と揃えると npm link の置き場が一致する
 git clone https://github.com/makoto-developer/strata.git
 cd strata && npm link           # `strata` コマンドが使えるようになる
 strata serve /path/to/your-monorepo
@@ -396,7 +338,7 @@ I が高いほど「多くに依存し変更の影響を受けやすい」、低
     { "name": "gateway", "path": "gateway" },
     { "name": "user-service", "path": "services/user" }
   ],
-  "exclude": ["experimental"],        // 除外(パス前方一致 or ディレクトリ名)
+  "exclude": ["experimental", "**/e2e/**"], // 除外(パス前方一致 / ディレクトリ名 / グロブ)
   "includeTests": false,              // テストコードをグラフに含めるか(既定: false)
   "testPaths": ["tools/test-client"], // テスト扱いにする追加パス
 
@@ -492,8 +434,21 @@ node strata/src/cli.ts diff base.json head.json   # 新規循環があれば exi
 - テキスト・構文レベルの静的解析(型推論なし)。**誤検出より取りこぼしを優先**する方針で、
   グラフに出ている依存は実在するものだけにしている
 - サービス間接続は proto を「正」とし、`go_package` / 生成スタブ / RPC 名の突き合わせで接続する
+- **生成クライアントライブラリを挟む構成**(proto → tag 付き生成物 → 別リポジトリの呼び出し元)は
+  `indirection` 設定で解決する。置き場所の規約は設定不要で、生成コードの中身
+  (フルメソッド名 `"/acme.user.v1.UserService/GetUser"`、または `typeName` と RPC 名の組)を
+  署名にして生成物を同定する。読みに行くファイルは拡張子・命名で足切りしており、
+  独自の命名は `artifactPaths` で足す。照合は proto の package を含む完全修飾名で行い、
+  決め手が無ければ繋がず「未解決」として残す
+- **Gateway / Federation のような中継層**は「中継候補」として印を付けるだけにしている。
+  呼び出し元がどの実装に到達するかは実行時に決まるため、層数・順序・到達先は示さない
 - interface 越しの呼び出し・高階関数・リフレクションは追跡しない。
-  メッセージキュー経由の依存は `messaging` 設定で検出(未設定なら対象外)
+  自前 Facade や DI コンテナ越しの gRPC 呼び出しも、呼び出し側にシンボルが残らないので追跡しない
+- メッセージキュー経由の依存は `messaging` 設定で検出(未設定なら対象外)。
+  トピック名が環境変数で与えられる場合は `infra` 設定で Kubernetes / Helm / Terraform から逆引きする。
+  実行時に組み立てられる名前は推測せず未解決として残す
+- 生成物の探索は既定では `node_modules` を歩かない(`artifactPaths` に書けば読む)
+- 解決できなかった参照は `strata unresolved` で一覧でき、設定を書く手掛かりになる
 - 詳細と各言語の対応範囲: [docs/SPEC.md](docs/SPEC.md)
 
 ## 開発
@@ -510,16 +465,14 @@ Strata 本体は**実行時依存ゼロ**ですが、開発・配布・ドキュ
 
 | 用途 | プロジェクト | ライセンス |
 | --- | --- | --- |
-| 実行ランタイム(バイナリに同梱) | [Node.js](https://github.com/nodejs/node) | MIT |
-| 単一実行ファイルへの blob 注入 | [postject](https://github.com/nodejs/postject) | MIT |
-| ビルド時のバンドル | [esbuild](https://github.com/evanw/esbuild) | MIT |
+| 実行ランタイム(利用者が用意) | [Node.js](https://github.com/nodejs/node) | MIT |
 | 型チェック(devDependency) | [TypeScript](https://github.com/microsoft/TypeScript) | Apache-2.0 |
 | スクリーンショット・デモ録画(開発時のみ) | [Playwright](https://github.com/microsoft/playwright) | Apache-2.0 |
 | ドキュメントサイトの生成 | [Jekyll](https://github.com/jekyll/jekyll) | MIT |
 | ドキュメントサイトのテーマ | [Just the Docs](https://github.com/just-the-docs/just-the-docs) | MIT |
 | 行動規範の原文 | [Contributor Covenant](https://www.contributor-covenant.org/) v2.1 | CC BY 4.0(出典表記は [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) に記載) |
 
-esbuild / postject / Playwright は `npm install --no-save` で**都度入れて使う**方式にしており、
+Playwright は `npm install --no-save` で**都度入れて使う**方式にしており、
 `package.json` の依存には含めていません(利用者側のインストールには不要です)。
 
 また、レポートの図生成には [Mermaid](https://github.com/mermaid-js/mermaid)(MIT)の記法を出力しています
@@ -544,9 +497,7 @@ esbuild / postject / Playwright は `npm install --no-save` で**都度入れて
 
 配布物に含まれる第三者コードの表記:
 
-- **macOS 向けバイナリ**には Node.js(MIT)を同梱しています。ライセンス全文は
-  アーカイブ内の `THIRD-PARTY-NOTICES.txt` に同梱しています
-- ソース配布物に第三者コードは含まれません(実行時依存ゼロ)。開発・ビルドで使う OSS は
+- 配布物に第三者コードは含まれません(ソース配布・実行時依存ゼロ)。開発・ビルドで使う OSS は
   [使っているもの・謝辞](#使っているもの謝辞)を参照してください
 
 質問・不具合の窓口は [SUPPORT.md](SUPPORT.md) を参照してください。

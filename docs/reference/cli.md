@@ -18,6 +18,7 @@ strata <command> [dir|model.json] [options]
 | `export` | 自己完結 HTML を書き出す(共有用) | `-o out.html` |
 | `check` | CI 検査(循環 / 禁止依存 / しきい値) | `--baseline`、`--update-baseline`、`--sarif FILE` |
 | `trace` | 関数から下流 / 上流を辿る | `--depth N` |
+| `unresolved` | 解決できなかった参照を一覧する | `--json` |
 | `report` | Markdown レポート(mermaid 図つき) | `-o report.md` |
 | `diff` | 2 つの状態を比較する | `--ref <base>..<head>` |
 | `metrics` | サービス結合度(Ca / Ce / 不安定度) | |

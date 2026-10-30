@@ -1,0 +1,1 @@
+{ "name": "package-collision", "services": [{ "name": "app", "path": "app" }], "indirection": { "enabled": true } }

@@ -1,0 +1,9 @@
+{
+  "name": "polyglot",
+  "services": [
+    { "name": "search", "path": "go-impl" },
+    { "name": "web", "path": "node-app" },
+    { "name": "worker", "path": "py-worker" }
+  ],
+  "indirection": { "enabled": true }
+}

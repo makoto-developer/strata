@@ -8,64 +8,13 @@ nav_order: 3
 
 ## インストール
 
-### macOS(Apple Silicon)アプリ
-
-端末を使わずに始めたい場合はこちら。インストールの 1 行だけ実行してください。
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/makoto-developer/strata/main/install.sh | bash
-```
-
-`/Applications/Strata.app` に入るので、あとは Launchpad や Finder から**ダブルクリックするだけ**です。
-初回はフォルダ選択が出るので解析したいリポジトリを選びます(2 回目以降は前回のフォルダで起動)。
-ビューアが既定のブラウザで開き、小さなウィンドウが残るので、終わるときは「終了」を押してください。
-サーバも一緒に止まります。
-
-インストーラは dmg を取得してチェックサムを照合し、配置したうえで**隔離属性を外します**。
-この最後の手順が要るのは、Apple の**公証(notarization)を受けていない**ためです。
-dmg を手でドラッグした場合は、代わりに次を 1 回実行してください。
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Strata.app
-```
-
-これをしないと「"Strata"は壊れているため開けません。ゴミ箱に入れる必要があります。」と出ます。
-アプリが壊れているわけではなく、署名の検証自体は通ります。
-**macOS 15 (Sequoia) 以降は「右クリック → 開く」では回避できません**(Apple が廃止したため)。
-
-アプリの中には CLI も同梱しているので、端末からも使いたい場合は PATH に置けます。
-
-```sh
-sudo ln -sf /Applications/Strata.app/Contents/MacOS/strata-cli /usr/local/bin/strata
-```
-
-### macOS(Apple Silicon)バイナリ
-
-CLI だけ欲しい場合。Node.js を入れずに使えます。ランタイムを同梱した単一実行ファイルです。
-
-```sh
-curl -fsSL https://github.com/makoto-developer/strata/releases/latest/download/strata-macos-arm64.tar.gz | tar xz
-sudo mv strata /usr/local/bin/
-strata --version
-```
-
-| 項目 | サポート |
-| --- | --- |
-| OS | **macOS 13 Ventura 以降** |
-| CPU | **Apple Silicon(M1 / M2 / M3 / M4 …)** |
-| 同梱ランタイム | Node.js v24.18.0 |
-| Intel Mac / Linux / Windows | バイナリ提供なし。下の「git clone 版」を使ってください |
-
-バイナリは ad-hoc 署名のみで Apple の公証は受けていません。`curl` 取得ならそのまま動きますが、
-ブラウザでダウンロードした場合は隔離属性を外してください。
-
-```sh
-xattr -d com.apple.quarantine ./strata
-```
+ビルド済みバイナリは現在配布していません。いずれもソースから入りますが、
+ビルド不要・実行時依存ゼロなので `node` さえあれば動きます。
 
 ### git clone 版(全 OS)
 
-Node.js **22.18 以降**が必要です(TypeScript の型ストリッピングを使うため)。
+Node.js **24.12 以上**が必要です(TypeScript の型ストリッピングを使うため。24.12.0 で stable になりました)。
+25 系は EOL 済み(2026-06-01)のため対象外です。
 
 ```sh
 git clone https://github.com/makoto-developer/strata.git
@@ -88,7 +37,7 @@ brew install strata
 ```
 
 `brew trust` を省くと `Refusing to load formula from untrusted tap` で止まります。
-Apple Silicon では Node.js 同梱のバイナリ、Intel Mac / Linux ではソース + Homebrew の `node` が入ります。
+ソースから入り、Homebrew の `node` を使います(OS・CPU を問わず同じ構成です)。
 
 ### mise / asdf
 

@@ -34,6 +34,10 @@ class El {
   addEventListener(t, fn) { (this.handlers.get(t) ?? this.handlers.set(t, []).get(t)).push(fn); }
   fire(t, ev) { for (const fn of this.handlers.get(t) || []) fn(ev); }
   setAttribute(k, v) { this.attrs[k] = v; }
+  getAttribute(k) { return this.attrs[k] ?? null; }
+  // 図タブが表示範囲を決めるのに使う。ヘッドレスなので固定の箱を返す
+  getBoundingClientRect() { return { left: 0, top: 0, width: 1200, height: 700 }; }
+  contains() { return true; }
   querySelector() { return new El('(sub)'); }
   querySelectorAll() { return []; }
   scrollIntoView() {}
@@ -80,8 +84,9 @@ globalThis.document = {
   addEventListener: () => {},
 };
 
-const src = fs.readFileSync(fileURLToPath(new URL('../web/app.js', import.meta.url)), 'utf8');
-await eval(src);
+// ビューアは view 単位のモジュールに分かれている。配るのと同じ 1 本にまとめてから評価する
+const { bundleViewerJs } = await import('../src/server.ts');
+await eval(bundleViewerJs());
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
 const fail = (m) => { console.error('✖ ' + m); process.exitCode = 1; };

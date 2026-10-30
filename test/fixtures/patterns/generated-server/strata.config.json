@@ -1,0 +1,4 @@
+{
+  "name": "generated-server",
+  "indirection": { "enabled": true }
+}

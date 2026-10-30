@@ -4,14 +4,41 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chainBase, readFileText, type Ctx, type Project } from '../context.ts';
+import { setEvidence } from '../model.ts';
 import { countLines, leadingComment, makeLineFinder, matchBrace, stripSource } from '../lex.ts';
 
 interface GoFunc {
   id: string;
   name: string;
   recv?: string;
+  /** 宣言の本文直前までの文字列(引数と戻り値)。RPC ハンドラらしさの判定に使う */
+  sig: string;
   bodyStart: number;
   bodyEnd: number;
+}
+
+/**
+ * gRPC のサーバハンドラらしいシグネチャか。
+ * 生成される server interface は (ctx context.Context, *Req) (*Res, error) の形になる。
+ * これを見ないと、RPC 名とたまたま同じ名前のメソッド(メモリキャッシュの GetUser 等)を
+ * 実装として繋いでしまう。実際にデモへ 1 メソッド足すだけで誤接続が出た。
+ */
+function looksLikeGrpcHandler(sig: string): boolean {
+  const afterRecv = sig.replace(/^func\s*\([^)]*\)\s*/, 'func '); // レシーバを落とす
+  const open = afterRecv.indexOf('(');
+  if (open < 0) return false;
+  const close = matchParen(afterRecv, open);
+  if (close < 0) return false;
+  const params = afterRecv.slice(open + 1, close);
+  const rets = afterRecv.slice(close + 1);
+  // 生成される server interface は (ctx, *Req) (*Res, error)。
+  // ストリーミングは ctx を取らず (stream X_FooServer) error になることもあるので、
+  // 「error を返す」ことに加えて「ctx を取る or ストリーム型を取る」で見る。
+  // ポインタ引数までは要求しない — 手書きの薄い実装で普通に外れるため
+  if (!/\berror\b/.test(rets)) return false;
+  // import stdctx "context" のような別名でも本物のハンドラなので、修飾子は問わない。
+  // 「.Context を受けて error を返す」だけでも、無関係なメソッドはほぼ落ちる
+  return /\b\w+\.Context\b/.test(params) || /\b\w+(Server|Stream)\b/.test(params);
 }
 
 interface GoFileInfo {
@@ -72,7 +99,7 @@ export function parseImports(noComments: string): Array<{ alias?: string; path: 
 }
 
 /** 関数シグネチャの後ろから本体の '{' を探す(括弧の深さ 0 で最初に現れるもの)。 */
-function findBodyOpen(blanked: string, from: number): number {
+export function findBodyOpen(blanked: string, from: number): number {
   let depth = 0;
   for (let i = from; i < blanked.length; i++) {
     const ch = blanked[i];
@@ -146,7 +173,7 @@ function topAncestorId(ctx: Ctx, id: string): string {
   }
 }
 
-function receiverType(recvRaw: string): string | undefined {
+export function receiverType(recvRaw: string): string | undefined {
   const cleaned = recvRaw.replace(/\[[^\]]*\]/g, '').trim();
   if (cleaned === '') return undefined;
   const parts = cleaned.split(/\s+/);
@@ -191,6 +218,10 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
     list.push(wsRel);
   }
 
+  // 走査順が環境で変わると、同じ id を作る別実装(build tag)のどちらが meta に残るかが揺れる
+  for (const list of filesByDir.values()) list.sort();
+
+  const funcVariants = new Map<string, string[]>(); // funcId -> 定義ファイル(build tag で複数になる)
   const pkgIdOfDir = new Map<string, string>();
   for (const dir of [...filesByDir.keys()].sort()) {
     let pkgId: string;
@@ -284,6 +315,22 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
           }
           set.add(em[1]);
         }
+        // どの型が実装しているかまで押さえる。1 パッケージが複数 service を実装すると
+        // メソッド名だけでは同定できない(Health のような共通名が衝突する)
+        const structRe = /^type\s+(\w+)\s+struct\s*\{([^{}]*)\}/gm;
+        let sm: RegExpExecArray | null;
+        while ((sm = structRe.exec(noComments)) !== null) {
+          const bodyRe = /\bUnimplemented(\w+)Server\b/g;
+          for (let bm = bodyRe.exec(sm[2]); bm; bm = bodyRe.exec(sm[2])) {
+            const key = `${pkgId}#${sm[1]}`;
+            let set = ctx.goImplTypeServices.get(key);
+            if (!set) {
+              set = new Set();
+              ctx.goImplTypeServices.set(key, set);
+            }
+            set.add(bm[1]);
+          }
+        }
       }
 
       const isMainPkg = /^package main\b/m.test(noComments);
@@ -303,6 +350,16 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
         for (let i = open; i <= close; i++) if (blanked[i] === '\n') bodyLines++;
         const declLine = lineOf(m.index);
         const doc = leadingComment(srcLines, declLine);
+        // build tag で排他な別実装は同じ id になる。addNode は loc を足し meta を上書きするので、
+        // そのまま渡すと行数が二重に乗り、どのファイルが残るかが走査順で変わる
+        const variantOf = funcVariants.get(funcId);
+        if (variantOf) {
+          if (!variantOf.includes(wsRel)) variantOf.push(wsRel);
+          ctx.builder.addNode({ id: funcId, label, parent: pkgId, kind: 'func', lang: 'go', meta: { variants: variantOf } });
+          functions.push({ id: funcId, name, recv, sig: blanked.slice(m.index, open), bodyStart: open, bodyEnd: close });
+          continue;
+        }
+        funcVariants.set(funcId, [wsRel]);
         ctx.builder.addNode({
           id: funcId,
           label,
@@ -318,11 +375,13 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
             ...(isMainPkg && !recv && name === 'main' ? { entry: 'main' } : {}),
           },
         });
-        functions.push({ id: funcId, name, recv, bodyStart: open, bodyEnd: close });
+        functions.push({ id: funcId, name, recv, sig: blanked.slice(m.index, open), bodyStart: open, bodyEnd: close });
         if (!recv && !funcIndex.has(name)) funcIndex.set(name, funcId);
         if (recv) {
-          // 同名メソッドが複数レシーバに定義されている場合は曖昧(null)にする
-          methodIndex.set(name, methodIndex.has(name) ? null : funcId);
+          // 同名メソッドが複数レシーバに定義されている場合は曖昧(null)にする。
+          // build tag の別実装は id が同じなので曖昧ではない(呼び出し先は一意に決まる)
+          const prevMethod = methodIndex.get(name);
+          methodIndex.set(name, prevMethod === undefined || prevMethod === funcId ? funcId : null);
         }
       }
 
@@ -353,7 +412,7 @@ export function registerGo(ctx: Ctx, project: Project): GoState {
           loc: bodyLines + 1,
           meta: { file: wsRel, line: declLine, ...(doc ? { doc } : {}) },
         });
-        functions.push({ id: funcId, name, recv: undefined, bodyStart: open, bodyEnd: close });
+        functions.push({ id: funcId, name, recv: undefined, sig: blanked.slice(cm.index, open), bodyStart: open, bodyEnd: close });
         if (!funcIndex.has(name)) funcIndex.set(name, funcId);
       }
 
@@ -432,12 +491,12 @@ export function linkGo(ctx: Ctx, state: GoState): void {
     for (const importPath of file.importPaths) {
       const target = resolve(importPath);
       if (!target) {
-        // 標準ライブラリ・外部モジュールは対象外。内部っぽいのに解決できないものは警告
-        if (looksInternal(importPath)) {
-          ctx.builder.warn(`import が解決できません(module 名との不一致?): ${importPath}`);
-        }
+        // 標準ライブラリ・外部モジュールは対象外。内部っぽいのに解決できないものは覚えておく
+        // (ここで 1 件ずつ警告すると数百〜千行になり、しかもその多くは間接層が後で解決する)
+        if (looksInternal(importPath)) ctx.unresolvedImports.add(importPath);
         continue;
       }
+      if (looksInternal(importPath)) ctx.stats.importsResolved++;
       if (target.kind === 'pkg') {
         if (target.id !== file.pkgId) ctx.builder.addEdge(file.pkgId, target.id, 'import');
       } else {
@@ -463,6 +522,9 @@ export function linkGo(ctx: Ctx, state: GoState): void {
     const pkgImplServices = ctx.goPkgImplServices.get(file.pkgId);
     const isImplMethod = (fn: GoFunc, service: string): boolean => {
       if (pkgImplServices) return pkgImplServices.has(service);
+      // 名前が一致するだけの無関係なメソッドを「実装」と見なすと、
+      // その proto がファイル全体で呼び出し解決から外れ、本物の呼び出しが消える
+      if (!looksLikeGrpcHandler(fn.sig)) return false;
       // stub/client 系フィールド経由で同名を呼ぶだけならラッパー。
       // (h.repo.GetUser のようにリポジトリへ同名フォワードする正当な実装は除外しない)
       const body = file.blanked.slice(fn.bodyStart, fn.bodyEnd + 1);
@@ -506,7 +568,8 @@ export function linkGo(ctx: Ctx, state: GoState): void {
               if (funcId) ctx.builder.addEdge(fn.id, funcId, 'call', 1, siteAt(m.index));
             } else {
               const rpc = ctx.rpcOfProto.get(target.id)?.get(member);
-              if (rpc) ctx.builder.addEdge(fn.id, rpc.rpcId, 'rpc', 1, siteAt(m.index));
+              // 別名が実在の proto を指しているうえでのメソッド一致 = 構造的な証拠
+              if (rpc) setEvidence(ctx.builder.addEdge(fn.id, rpc.rpcId, 'rpc', 1, siteAt(m.index)), 'structural');
               else if (!/^New\w*Client$/.test(member)) ctx.builder.addEdge(fn.id, target.id, 'proto', 1, siteAt(m.index));
             }
             continue;
@@ -521,10 +584,12 @@ export function linkGo(ctx: Ctx, state: GoState): void {
             !implementedProtos.has(info.protoId),
         );
         if (candidates.length === 1) {
-          ctx.builder.addEdge(fn.id, candidates[0].rpcId, 'rpc', 1, siteAt(m.index));
+          // 名前の一致だけ。別 package の同名 API に化けうる弱い根拠
+          setEvidence(ctx.builder.addEdge(fn.id, candidates[0].rpcId, 'rpc', 1, siteAt(m.index)), 'name');
           continue;
         }
         if (candidates.length > 1) {
+          ctx.stats.ambiguous++;
           ctx.builder.warn(
             `RPC 名 '${member}' が複数の proto に一致するため接続をスキップ: ${file.wsRel}`,
           );
@@ -562,7 +627,12 @@ export function linkGo(ctx: Ctx, state: GoState): void {
           (info) => info.name === fn.name && fileProtoIds.has(info.protoId),
         );
         if (candidates.length === 1 && isImplMethod(fn, candidates[0].service)) {
-          ctx.builder.addEdge(candidates[0].rpcId, fn.id, 'impl');
+          // Unimplemented<Service>Server の埋め込みがあれば構造的、無ければ名前一致だけ。
+          // 名前一致だけのときは、シグネチャが gRPC ハンドラの形であることも要求する
+          const structural = pkgImplServices?.has(candidates[0].service) === true;
+          if (!structural && !looksLikeGrpcHandler(fn.sig)) continue;
+          const strength = structural ? 'structural' : 'name';
+          setEvidence(ctx.builder.addEdge(candidates[0].rpcId, fn.id, 'impl'), strength);
         }
       }
     }
